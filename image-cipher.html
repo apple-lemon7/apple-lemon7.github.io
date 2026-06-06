@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IMAGE CIPHER</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --surface2: #1a1a24;
+    --border: #2a2a3a;
+    --accent: #00ffaa;
+    --accent2: #ff6b6b;
+    --accent3: #6b8fff;
+    --text: #e8e8f0;
+    --text-muted: #6b6b80;
+    --font-mono: 'Space Mono', monospace;
+    --font-body: 'Noto Sans JP', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  .grid-bg {
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,255,170,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,255,170,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 3rem;
+  }
+
+  .logo {
+    font-family: var(--font-mono);
+    font-size: clamp(2rem, 6vw, 3.5rem);
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-shadow: 0 0 40px rgba(0,255,170,0.3);
+    margin-bottom: 0.5rem;
+  }
+
+  .logo span { color: var(--text-muted); }
+
+  .tagline {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    color: var(--text-muted);
+    text-transform: uppercase;
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 2rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .tab-btn {
+    flex: 1;
+    padding: 0.85rem 1rem;
+    background: var(--surface);
+    border: none;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    position: relative;
+  }
+
+  .tab-btn:not(:last-child) { border-right: 1px solid var(--border); }
+
+  .tab-btn.active {
+    background: var(--surface2);
+    color: var(--accent);
+  }
+
+  .tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--accent);
+  }
+
+  .tab-btn:hover:not(.active) { background: var(--surface2); color: var(--text); }
+
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  @media (max-width: 600px) {
+    .panel-grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.25rem;
+  }
+
+  .card-label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .card-label::before {
+    content: '';
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .card-label.red::before { background: var(--accent2); }
+  .card-label.blue::before { background: var(--accent3); }
+
+  .drop-zone {
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.25s;
+    position: relative;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(0,255,170,0.03);
+  }
+
+  .drop-zone.drag-over { border-style: solid; }
+
+  .drop-icon {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+    opacity: 0.4;
+  }
+
+  .drop-text {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+
+  .drop-zone canvas, .drop-zone img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .drop-zone .drop-hint {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(10,10,15,0.85);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+
+  .drop-zone:hover .drop-hint { opacity: 1; }
+
+  .password-row {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1.25rem;
+  }
+
+  .pw-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    letter-spacing: 0.08em;
+  }
+
+  input[type="text"], input[type="password"] {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    padding: 0.6rem 0.8rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  input:focus { border-color: var(--accent); }
+
+  .pw-toggle {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-muted);
+    padding: 0.5rem 0.7rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: all 0.2s;
+  }
+
+  .pw-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn {
+    width: 100%;
+    padding: 0.85rem;
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    background: transparent;
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .btn.red { border-color: var(--accent2); color: var(--accent2); }
+  .btn.red:hover { background: var(--accent2); color: var(--bg); }
+
+  .btn.blue { border-color: var(--accent3); color: var(--accent3); }
+  .btn.blue:hover { background: var(--accent3); color: var(--bg); }
+
+  .action-row {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .status-bar {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    padding: 0.6rem 0.8rem;
+    border-radius: 4px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    min-height: 36px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s;
+  }
+
+  .status-bar.ok { border-color: rgba(0,255,170,0.4); color: var(--accent); }
+  .status-bar.err { border-color: rgba(255,107,107,0.4); color: var(--accent2); }
+
+  .blink {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: blink 1s step-end infinite;
+  }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .steg-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+  }
+
+  @media (max-width: 600px) {
+    .steg-grid { grid-template-columns: 1fr; }
+  }
+
+  .arrow-col {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    padding-top: 2.5rem;
+  }
+
+  .mode-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 0.25rem 0.6rem;
+    border-radius: 2px;
+    border: 1px solid;
+    margin-left: 0.5rem;
+  }
+
+  .mode-badge.encode { border-color: rgba(0,255,170,0.3); color: var(--accent); }
+  .mode-badge.decode { border-color: rgba(107,143,255,0.3); color: var(--accent3); }
+
+  .info-text {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    line-height: 1.7;
+    margin-bottom: 1.25rem;
+    padding: 0.75rem 1rem;
+    border-left: 2px solid var(--border);
+  }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div class="grid-bg"></div>
+<div class="container">
+
+  <header>
+    <div class="logo">IMAGE<span>_</span>CIPHER</div>
+    <div class="tagline">秘密の画像を作ろう &mdash; encode &bull; decode &bull; hide</div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('scramble')">&#9632; スクランブル暗号化</button>
+    <button class="tab-btn" onclick="switchTab('steg')">&#9632; ステガノグラフィ</button>
+  </div>
+
+  <!-- ===== SCRAMBLE TAB ===== -->
+  <div id="tab-scramble" class="tab-panel active">
+
+    <div style="display:flex; gap:0.75rem; margin-bottom:1.5rem; align-items:center; flex-wrap:wrap;">
+      <button class="tab-btn active" id="sc-enc-btn" onclick="setScrambleMode('encode')" style="flex:none; border-radius:4px; border:1px solid var(--border);">
+        エンコード
+        <span class="mode-badge encode">encode</span>
+      </button>
+      <button class="tab-btn" id="sc-dec-btn" onclick="setScrambleMode('decode')" style="flex:none; border-radius:4px; border:1px solid var(--border);">
+        デコード
+        <span class="mode-badge decode">decode</span>
+      </button>
+    </div>
+
+    <p class="info-text" id="sc-info-enc">
+      画像をドロップすると、パスワードを鍵にしてピクセルをシャッフル＋色変換します。<br>
+      元の画像が何か全くわからなくなります。同じパスワードでのみ復元できます。
+    </p>
+    <p class="info-text hidden" id="sc-info-dec">
+      暗号化された画像と同じパスワードを入力してデコードします。<br>
+      間違ったパスワードでは正しく復元できません。
+    </p>
+
+    <div class="password-row">
+      <span class="pw-label">PASSWORD</span>
+      <input type="password" id="sc-password" placeholder="パスワードを入力…" />
+      <button class="pw-toggle" onclick="togglePw('sc-password', this)">表示</button>
+    </div>
+
+    <div class="panel-grid">
+      <div class="card">
+        <div class="card-label" id="sc-input-label">入力画像</div>
+        <div class="drop-zone" id="sc-drop-in" data-canvas="sc-canvas-in" data-ph="sc-placeholder" onclick="triggerFile('sc-file-in')">
+          <canvas id="sc-canvas-in" style="display:none;"></canvas>
+          <div class="drop-hint" id="sc-hint-in">
+            <div class="drop-icon">↓</div>
+            <div class="drop-text">画像を<br>ドロップ</div>
+          </div>
+          <div id="sc-placeholder">
+            <div class="drop-icon">⊕</div>
+            <div class="drop-text">画像をここに<br>ドラッグ&amp;ドロップ</div>
+          </div>
+        </div>
+        <input type="file" id="sc-file-in" accept="image/*" style="display:none;" onchange="loadFileToCanvas(event,'sc-canvas-in','sc-placeholder','sc-src-img')">
+      </div>
+
+      <div class="card">
+        <div class="card-label" id="sc-output-label" style="color: var(--accent);">出力画像</div>
+        <div class="drop-zone" id="sc-drop-out" style="cursor:default;">
+          <canvas id="sc-canvas-out" style="display:none;"></canvas>
+          <div id="sc-out-placeholder">
+            <div class="drop-icon" style="opacity:0.2;">○</div>
+            <div class="drop-text">処理後に表示</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="btn" id="sc-run-btn" onclick="runScramble()" disabled>▶ 実行</button>
+      <button class="btn blue" id="sc-save-btn" onclick="saveCanvas('sc-canvas-out','scrambled.png')" disabled>↓ 保存</button>
+      <div class="status-bar" id="sc-status"><span class="blink"></span>&nbsp;待機中…</div>
+    </div>
+
+  </div>
+
+  <!-- ===== STEGANOGRAPHY TAB ===== -->
+  <div id="tab-steg" class="tab-panel">
+
+    <div style="display:flex; gap:0.75rem; margin-bottom:1.5rem; align-items:center; flex-wrap:wrap;">
+      <button class="tab-btn active" id="st-enc-btn" onclick="setStegMode('encode')" style="flex:none; border-radius:4px; border:1px solid var(--border);">
+        埋め込み
+        <span class="mode-badge encode">hide</span>
+      </button>
+      <button class="tab-btn" id="st-dec-btn" onclick="setStegMode('decode')" style="flex:none; border-radius:4px; border:1px solid var(--border);">
+        取り出し
+        <span class="mode-badge decode">reveal</span>
+      </button>
+    </div>
+
+    <!-- ENCODE -->
+    <div id="steg-enc-panel">
+      <p class="info-text">
+        「カバー画像」の中に「秘密画像」を埋め込みます。<br>
+        見た目はカバー画像のままですが、パスワードを持つ人だけ秘密画像を取り出せます。
+      </p>
+      <div class="password-row">
+        <span class="pw-label">PASSWORD</span>
+        <input type="password" id="st-enc-password" placeholder="パスワードを入力…" />
+        <button class="pw-toggle" onclick="togglePw('st-enc-password', this)">表示</button>
+      </div>
+      <div class="steg-grid">
+        <div class="card">
+          <div class="card-label">カバー画像</div>
+          <div class="drop-zone" data-canvas="st-cover-canvas" data-ph="st-cover-ph" onclick="triggerFile('st-cover-file')">
+            <canvas id="st-cover-canvas" style="display:none;"></canvas>
+            <div class="drop-hint"><div class="drop-icon">↓</div><div class="drop-text">ドロップ</div></div>
+            <div id="st-cover-ph"><div class="drop-icon">⊕</div><div class="drop-text">カバー画像</div></div>
+          </div>
+          <input type="file" id="st-cover-file" accept="image/*" style="display:none;" onchange="loadFileToCanvas(event,'st-cover-canvas','st-cover-ph',null)">
+        </div>
+        <div class="arrow-col">＋</div>
+        <div class="card">
+          <div class="card-label red">秘密画像</div>
+          <div class="drop-zone" data-canvas="st-secret-canvas" data-ph="st-secret-ph" onclick="triggerFile('st-secret-file')">
+            <canvas id="st-secret-canvas" style="display:none;"></canvas>
+            <div class="drop-hint"><div class="drop-icon">↓</div><div class="drop-text">ドロップ</div></div>
+            <div id="st-secret-ph"><div class="drop-icon">⊕</div><div class="drop-text">秘密画像</div></div>
+          </div>
+          <input type="file" id="st-secret-file" accept="image/*" style="display:none;" onchange="loadFileToCanvas(event,'st-secret-canvas','st-secret-ph',null)">
+        </div>
+      </div>
+      <div class="action-row">
+        <button class="btn" id="st-enc-btn-run" onclick="runStegEncode()" disabled>▶ 埋め込み実行</button>
+        <div class="card" style="padding:1rem;">
+          <div class="card-label">出力画像（カバー画像に見える）</div>
+          <div class="drop-zone" style="cursor:default; min-height:140px;">
+            <canvas id="st-out-canvas" style="display:none;"></canvas>
+            <div id="st-out-ph"><div class="drop-icon" style="opacity:0.2;">○</div><div class="drop-text">処理後に表示</div></div>
+          </div>
+        </div>
+        <button class="btn blue" id="st-save-enc-btn" onclick="saveCanvas('st-out-canvas','steg_encoded.png')" disabled>↓ 保存</button>
+        <div class="status-bar" id="st-enc-status"><span class="blink"></span>&nbsp;待機中…</div>
+      </div>
+    </div>
+
+    <!-- DECODE -->
+    <div id="steg-dec-panel" class="hidden">
+      <p class="info-text">
+        ステガノグラフィで埋め込まれた画像をドロップし、パスワードを入力してください。<br>
+        正しいパスワードで秘密画像が現れます。
+      </p>
+      <div class="password-row">
+        <span class="pw-label">PASSWORD</span>
+        <input type="password" id="st-dec-password" placeholder="パスワードを入力…" />
+        <button class="pw-toggle" onclick="togglePw('st-dec-password', this)">表示</button>
+      </div>
+      <div class="panel-grid">
+        <div class="card">
+          <div class="card-label">ステガノ画像</div>
+          <div class="drop-zone" data-canvas="st-dec-canvas" data-ph="st-dec-ph" onclick="triggerFile('st-dec-file')">
+            <canvas id="st-dec-canvas" style="display:none;"></canvas>
+            <div class="drop-hint"><div class="drop-icon">↓</div><div class="drop-text">ドロップ</div></div>
+            <div id="st-dec-ph"><div class="drop-icon">⊕</div><div class="drop-text">画像をドロップ</div></div>
+          </div>
+          <input type="file" id="st-dec-file" accept="image/*" style="display:none;" onchange="loadFileToCanvas(event,'st-dec-canvas','st-dec-ph',null)">
+        </div>
+        <div class="card">
+          <div class="card-label red">取り出された秘密画像</div>
+          <div class="drop-zone" style="cursor:default;">
+            <canvas id="st-rev-canvas" style="display:none;"></canvas>
+            <div id="st-rev-ph"><div class="drop-icon" style="opacity:0.2;">○</div><div class="drop-text">処理後に表示</div></div>
+          </div>
+        </div>
+      </div>
+      <div class="action-row">
+        <button class="btn blue" id="st-dec-btn-run" onclick="runStegDecode()" disabled>▶ 取り出し実行</button>
+        <button class="btn" id="st-save-dec-btn" onclick="saveCanvas('st-rev-canvas','steg_secret.png')" disabled>↓ 保存</button>
+        <div class="status-bar" id="st-dec-status"><span class="blink"></span>&nbsp;待機中…</div>
+      </div>
+    </div>
+
+  </div><!-- end steg tab -->
+
+</div><!-- container -->
+
+<script>
+// ── TAB ──────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tabs .tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
+
+// ── MODE SWITCH ───────────────────────────────────────
+let scrambleMode = 'encode';
+function setScrambleMode(m) {
+  scrambleMode = m;
+  document.getElementById('sc-enc-btn').classList.toggle('active', m==='encode');
+  document.getElementById('sc-dec-btn').classList.toggle('active', m==='decode');
+  document.getElementById('sc-info-enc').classList.toggle('hidden', m!=='encode');
+  document.getElementById('sc-info-dec').classList.toggle('hidden', m!=='decode');
+  document.getElementById('sc-input-label').textContent = m==='encode' ? '入力画像' : '暗号化画像';
+  document.getElementById('sc-output-label').textContent = m==='encode' ? '暗号化後' : '復元画像';
+  document.getElementById('sc-run-btn').textContent = m==='encode' ? '▶ 暗号化' : '▶ 復元';
+  clearCanvas('sc-canvas-in'); clearCanvas('sc-canvas-out');
+  setStatus('sc-status','待機中…','');
+  document.getElementById('sc-run-btn').disabled = true;
+  document.getElementById('sc-save-btn').disabled = true;
+}
+
+let stegMode = 'encode';
+function setStegMode(m) {
+  stegMode = m;
+  document.getElementById('st-enc-btn').classList.toggle('active', m==='encode');
+  document.getElementById('st-dec-btn').classList.toggle('active', m==='decode');
+  document.getElementById('steg-enc-panel').classList.toggle('hidden', m!=='encode');
+  document.getElementById('steg-dec-panel').classList.toggle('hidden', m!=='decode');
+}
+
+// ── UTILS ─────────────────────────────────────────────
+function setStatus(id, msg, type) {
+  const el = document.getElementById(id);
+  el.className = 'status-bar' + (type ? ' '+type : '');
+  el.innerHTML = '<span class="blink"></span>&nbsp;' + msg;
+}
+
+function clearCanvas(id) {
+  const c = document.getElementById(id);
+  c.style.display = 'none';
+}
+
+function triggerFile(id) { document.getElementById(id).click(); }
+
+function togglePw(id, btn) {
+  const el = document.getElementById(id);
+  if(el.type === 'password') { el.type='text'; btn.textContent='隠す'; }
+  else { el.type='password'; btn.textContent='表示'; }
+}
+
+function saveCanvas(id, filename) {
+  const c = document.getElementById(id);
+  const a = document.createElement('a');
+  a.download = filename;
+  a.href = c.toDataURL('image/png');
+  a.click();
+}
+
+function loadFileToCanvas(e, canvasId, phId, srcStore) {
+  const file = e.target.files[0];
+  if(!file) return;
+  loadFileObj(file, canvasId, phId);
+  e.target.value='';
+}
+
+function loadFileObj(file, canvasId, phId) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.getElementById(canvasId);
+      c.width = img.width; c.height = img.height;
+      c.getContext('2d').drawImage(img, 0, 0);
+      c.style.display = 'block';
+      if(phId) document.getElementById(phId).style.display = 'none';
+      if(canvasId === 'sc-canvas-in') {
+        document.getElementById('sc-run-btn').disabled = false;
+      }
+      if(canvasId === 'st-cover-canvas' || canvasId === 'st-secret-canvas') {
+        const a = document.getElementById('st-cover-canvas');
+        const b = document.getElementById('st-secret-canvas');
+        if(a.width>0 && b.width>0) document.getElementById('st-enc-btn-run').disabled = false;
+      }
+      if(canvasId === 'st-dec-canvas') {
+        document.getElementById('st-dec-btn-run').disabled = false;
+      }
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// Setup drag & drop on all drop-zones
+// Map zone id → [canvasId, phId]
+const dropZoneMap = {
+  'sc-drop-in':    ['sc-canvas-in',     'sc-placeholder'],
+  'st-cover-file': ['st-cover-canvas',  'st-cover-ph'],
+  'st-secret-file':['st-secret-canvas', 'st-secret-ph'],
+  'st-dec-file':   ['st-dec-canvas',    'st-dec-ph'],
+};
+
+document.querySelectorAll('.drop-zone').forEach(zone => {
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', e => {
+    if(!zone.contains(e.relatedTarget)) zone.classList.remove('drag-over');
+  });
+  zone.addEventListener('drop', e => {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    const file = e.dataTransfer.files[0];
+    if(!file || !file.type.startsWith('image/')) return;
+    // Walk up from actual drop target to find zone with data-canvas
+    let target = e.target;
+    while(target && target !== document.body) {
+      if(target.dataset && target.dataset.canvas) {
+        loadFileObj(file, target.dataset.canvas, target.dataset.ph);
+        return;
+      }
+      target = target.parentElement;
+    }
+  });
+});
+
+// ── SEEDED RNG (mulberry32) ───────────────────────────
+function mulberry32(seed) {
+  return function() {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0;
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function hashPassword(pw) {
+  let hash = 0x811c9dc5;
+  for(let i=0; i<pw.length; i++) {
+    hash ^= pw.charCodeAt(i);
+    hash = (hash * 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
+function buildShuffleMap(n, seed) {
+  const indices = Array.from({length:n}, (_,i)=>i);
+  const rng = mulberry32(seed);
+  for(let i=n-1;i>0;i--) {
+    const j = Math.floor(rng()*(i+1));
+    [indices[i], indices[j]] = [indices[j], indices[i]];
+  }
+  return indices;
+}
+
+// ── SCRAMBLE ──────────────────────────────────────────
+function runScramble() {
+  const pw = document.getElementById('sc-password').value;
+  if(!pw) { setStatus('sc-status','パスワードを入力してください','err'); return; }
+
+  const src = document.getElementById('sc-canvas-in');
+  if(!src.width) { setStatus('sc-status','画像を読み込んでください','err'); return; }
+
+  setStatus('sc-status','処理中…','');
+
+  setTimeout(() => {
+    try {
+      const W = src.width, H = src.height;
+      const ctx = src.getContext('2d');
+      const src_data = ctx.getImageData(0,0,W,H);
+      const pixels = src_data.data;
+
+      const seed = hashPassword(pw);
+      const n = W * H;
+      const map = buildShuffleMap(n, seed);
+
+      // Key stream for XOR color scramble
+      const rng2 = mulberry32(seed ^ 0xDEADBEEF);
+
+      const dst = document.getElementById('sc-canvas-out');
+      dst.width = W; dst.height = H;
+      const dctx = dst.getContext('2d');
+      const out = dctx.createImageData(W, H);
+      const od = out.data;
+
+      if(scrambleMode === 'encode') {
+        // Shuffle pixels + XOR
+        for(let i=0; i<n; i++) {
+          const src_i = i * 4;
+          const dst_i = map[i] * 4;
+          const k1 = Math.floor(rng2()*256);
+          const k2 = Math.floor(rng2()*256);
+          const k3 = Math.floor(rng2()*256);
+          od[dst_i]   = pixels[src_i]   ^ k1;
+          od[dst_i+1] = pixels[src_i+1] ^ k2;
+          od[dst_i+2] = pixels[src_i+2] ^ k3;
+          od[dst_i+3] = 255;
+        }
+      } else {
+        // Decode: build reverse map  rmap[map[i]] = i
+        const rmap = new Int32Array(n);
+        for(let i=0;i<n;i++) rmap[map[i]] = i;
+        // Pre-generate all keys indexed by original pixel index
+        // encode: pixel i → position map[i], XOR key[i]
+        // decode: position i has orig index rmap[i], XOR key[rmap[i]]
+        const keys = new Uint8Array(n*3);
+        for(let i=0;i<n;i++) {
+          keys[i*3]   = Math.floor(rng2()*256);
+          keys[i*3+1] = Math.floor(rng2()*256);
+          keys[i*3+2] = Math.floor(rng2()*256);
+        }
+        for(let i=0; i<n; i++) {
+          const src_i = i * 4;          // current (scrambled) position
+          const orig_i = rmap[i];       // original pixel index
+          const dst_i = orig_i * 4;     // restore to original position
+          od[dst_i]   = pixels[src_i]   ^ keys[orig_i*3];
+          od[dst_i+1] = pixels[src_i+1] ^ keys[orig_i*3+1];
+          od[dst_i+2] = pixels[src_i+2] ^ keys[orig_i*3+2];
+          od[dst_i+3] = 255;
+        }
+      }
+
+      dctx.putImageData(out, 0, 0);
+      dst.style.display = 'block';
+      document.getElementById('sc-out-placeholder').style.display = 'none';
+      document.getElementById('sc-save-btn').disabled = false;
+      setStatus('sc-status', scrambleMode==='encode' ? '暗号化完了！' : '復元完了！', 'ok');
+    } catch(e) {
+      setStatus('sc-status','エラー: '+e.message,'err');
+    }
+  }, 50);
+}
+
+// ── STEGANOGRAPHY ─────────────────────────────────────
+// LSB steganography: hide secret in lowest 4 bits of cover
+// Each secret pixel (8-bit channel) → store in two cover pixels (4 bits each)
+// With password-based shuffling of which pixels to use
+
+function runStegEncode() {
+  const pw = document.getElementById('st-enc-password').value;
+  if(!pw) { setStatus('st-enc-status','パスワードを入力してください','err'); return; }
+
+  const coverC = document.getElementById('st-cover-canvas');
+  const secretC = document.getElementById('st-secret-canvas');
+  if(!coverC.width || !secretC.width) { setStatus('st-enc-status','両方の画像を読み込んでください','err'); return; }
+
+  setStatus('st-enc-status','処理中…','');
+
+  setTimeout(() => {
+    try {
+      const CW = coverC.width, CH = coverC.height;
+      const SW = secretC.width, SH = secretC.height;
+
+      // Check capacity: need 3 channels of secret stored in 4 bits of cover
+      // Each secret pixel needs: 3 channels × 2 cover pixels = 6 cover pixels
+      // Header: store SW(2 bytes), SH(2 bytes), check(4 bytes) = 8 bytes = 8×2=16 cover pixels
+      const coverPixels = CW * CH;
+      const secretPixels = SW * SH;
+      const needed = (8 + secretPixels * 3) * 2; // pairs of cover pixels
+      if(needed > coverPixels) {
+        setStatus('st-enc-status',`カバー画像が小さすぎます (必要: ${needed}px, 実際: ${coverPixels}px)`,'err');
+        return;
+      }
+
+      const coverCtx = coverC.getContext('2d');
+      const coverData = coverCtx.getImageData(0,0,CW,CH);
+      const cd = coverData.data;
+
+      const secretCtx = secretC.getContext('2d');
+      // Scale secret to fit
+      const scaledSecret = document.createElement('canvas');
+      scaledSecret.width = SW; scaledSecret.height = SH;
+      scaledSecret.getContext('2d').drawImage(secretC,0,0);
+      const sd = scaledSecret.getContext('2d').getImageData(0,0,SW,SH).data;
+
+      // Build shuffled pixel order from password
+      const seed = hashPassword(pw);
+      const pmap = buildShuffleMap(coverPixels, seed);
+
+      // Encode function: write nibble to pmap[idx] pixel's channel
+      const out = new Uint8ClampedArray(cd);
+
+      function writeNibble(pixIdx, channel, nibble) {
+        const pi = pmap[pixIdx] * 4 + channel;
+        out[pi] = (out[pi] & 0xF0) | (nibble & 0x0F);
+      }
+
+      // Encode a byte into two consecutive nibbles at pixelIndex
+      let writeIdx = 0;
+      function writeByte(byte, ch) {
+        writeNibble(writeIdx, ch, (byte >> 4) & 0x0F);
+        writeNibble(writeIdx+1, ch, byte & 0x0F);
+        writeIdx += 2;
+      }
+
+      // Header: magic + dimensions
+      // 4 magic bytes: 0xC1, 0xPH, 0xER, checksum
+      const check = (seed ^ SW ^ SH ^ 0xABCD) & 0xFF;
+      // Write header as 8 bytes in R channel
+      writeIdx = 0;
+      const header = [0xC1, 0xEA, (SW>>8)&0xFF, SW&0xFF, (SH>>8)&0xFF, SH&0xFF, check, 0x00];
+      header.forEach(b => writeByte(b, 0)); // 16 pixels used
+
+      // Write secret pixel data
+      for(let i=0; i<secretPixels; i++) {
+        writeByte(sd[i*4],   0); // R
+        writeByte(sd[i*4+1], 1); // G
+        writeByte(sd[i*4+2], 2); // B
+      }
+
+      const outC = document.getElementById('st-out-canvas');
+      outC.width = CW; outC.height = CH;
+      const outCtx = outC.getContext('2d');
+      const outImg = outCtx.createImageData(CW, CH);
+      outImg.data.set(out);
+      outCtx.putImageData(outImg, 0, 0);
+      outC.style.display = 'block';
+      document.getElementById('st-out-ph').style.display = 'none';
+      document.getElementById('st-save-enc-btn').disabled = false;
+      setStatus('st-enc-status',`埋め込み完了！秘密画像 ${SW}×${SH}px を隠しました`, 'ok');
+    } catch(e) {
+      setStatus('st-enc-status','エラー: '+e.message,'err');
+    }
+  }, 50);
+}
+
+function runStegDecode() {
+  const pw = document.getElementById('st-dec-password').value;
+  if(!pw) { setStatus('st-dec-status','パスワードを入力してください','err'); return; }
+
+  const stegC = document.getElementById('st-dec-canvas');
+  if(!stegC.width) { setStatus('st-dec-status','画像を読み込んでください','err'); return; }
+
+  setStatus('st-dec-status','処理中…','');
+
+  setTimeout(() => {
+    try {
+      const CW = stegC.width, CH = stegC.height;
+      const ctx = stegC.getContext('2d');
+      const cd = ctx.getImageData(0,0,CW,CH).data;
+
+      const seed = hashPassword(pw);
+      const coverPixels = CW * CH;
+      const pmap = buildShuffleMap(coverPixels, seed);
+
+      function readNibble(pixIdx, channel) {
+        return cd[pmap[pixIdx]*4 + channel] & 0x0F;
+      }
+
+      let readIdx = 0;
+      function readByte(ch) {
+        const hi = readNibble(readIdx, ch);
+        const lo = readNibble(readIdx+1, ch);
+        readIdx += 2;
+        return (hi << 4) | lo;
+      }
+
+      // Read header
+      readIdx = 0;
+      const h0 = readByte(0); // 0xC1
+      const h1 = readByte(0); // 0xEA
+      const swHi = readByte(0); const swLo = readByte(0);
+      const shHi = readByte(0); const shLo = readByte(0);
+      const check = readByte(0); readByte(0); // last byte padding
+
+      if(h0 !== 0xC1 || h1 !== 0xEA) {
+        setStatus('st-dec-status','データが見つかりません。パスワードが違う可能性があります。','err');
+        return;
+      }
+
+      const SW = (swHi << 8) | swLo;
+      const SH = (shHi << 8) | shLo;
+      const expectedCheck = (seed ^ SW ^ SH ^ 0xABCD) & 0xFF;
+      if(check !== expectedCheck) {
+        setStatus('st-dec-status','パスワードが正しくありません。','err');
+        return;
+      }
+
+      const secretPixels = SW * SH;
+      const outData = new Uint8ClampedArray(secretPixels * 4);
+
+      for(let i=0; i<secretPixels; i++) {
+        outData[i*4]   = readByte(0);
+        outData[i*4+1] = readByte(1);
+        outData[i*4+2] = readByte(2);
+        outData[i*4+3] = 255;
+      }
+
+      const revC = document.getElementById('st-rev-canvas');
+      revC.width = SW; revC.height = SH;
+      const rctx = revC.getContext('2d');
+      const img = rctx.createImageData(SW, SH);
+      img.data.set(outData);
+      rctx.putImageData(img, 0, 0);
+      revC.style.display = 'block';
+      document.getElementById('st-rev-ph').style.display = 'none';
+      document.getElementById('st-save-dec-btn').disabled = false;
+      setStatus('st-dec-status',`秘密画像を取り出しました！ (${SW}×${SH}px)`, 'ok');
+    } catch(e) {
+      setStatus('st-dec-status','エラー: '+e.message,'err');
+    }
+  }, 50);
+}
+</script>
+</body>
+</html>
