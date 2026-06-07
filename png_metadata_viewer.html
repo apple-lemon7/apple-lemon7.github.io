@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>PNGメタ情報ビューア</title>
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  margin: 20px;
+  background: #f6f6f6;
+}
+#dropZone {
+  border: 3px dashed #888;
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+  background: white;
+  cursor: pointer;
+}
+#dropZone.dragover {
+  background: #e8f2ff;
+  border-color: #2678d9;
+}
+button {
+  margin: 12px 8px 12px 0;
+  padding: 8px 14px;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+th {
+  background: #eee;
+}
+pre {
+  white-space: pre-wrap;
+  word-break: break-all;
+  margin: 0;
+}
+#message {
+  margin: 10px 0;
+}
+</style>
+</head>
+<body>
+
+<h1>PNGメタ情報ビューア</h1>
+
+<div id="dropZone">
+  PNG画像をここへドラッグ＆ドロップ<br>
+  またはクリックして選択
+</div>
+
+<input id="fileInput" type="file" accept="image/png" hidden>
+
+<div>
+  <button id="copySelected">選択した情報をコピー</button>
+  <button id="selectAll">すべて選択</button>
+  <button id="clearSelect">選択解除</button>
+</div>
+
+<div id="message"></div>
+<div id="basicInfo"></div>
+<table id="chunkTable"></table>
+
+<script>
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+const message = document.getElementById("message");
+const basicInfo = document.getElementById("basicInfo");
+const chunkTable = document.getElementById("chunkTable");
+
+let parsedChunks = [];
+
+dropZone.addEventListener("click", () => fileInput.click());
+
+fileInput.addEventListener("change", () => {
+  if (fileInput.files.length > 0) {
+    handleFile(fileInput.files[0]);
+  }
+});
+
+dropZone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropZone.classList.add("dragover");
+});
+
+dropZone.addEventListener("dragleave", () => {
+  dropZone.classList.remove("dragover");
+});
+
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+async function handleFile(file) {
+  message.textContent = "";
+  basicInfo.innerHTML = "";
+  chunkTable.innerHTML = "";
+  parsedChunks = [];
+
+  if (file.type !== "image/png" && !file.name.toLowerCase().endsWith(".png")) {
+    message.textContent = "PNGファイルを選択してください。";
+    return;
+  }
+
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  if (!isPng(bytes)) {
+    message.textContent = "PNG形式ではありません。";
+    return;
+  }
+
+  parsedChunks = parsePngChunks(buffer);
+
+  basicInfo.innerHTML = `
+    <h2>ファイル情報</h2>
+    <pre>${escapeHtml(
+`ファイル名: ${file.name}
+サイズ: ${file.size} bytes
+MIMEタイプ: ${file.type || "(不明)"}
+更新日時: ${new Date(file.lastModified).toLocaleString()}`
+    )}</pre>
+  `;
+
+  renderChunks(parsedChunks);
+}
+
+function isPng(bytes) {
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  return sig.every((v, i) => bytes[i] === v);
+}
+
+function parsePngChunks(buffer) {
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  const chunks = [];
+  let pos = 8;
+
+  while (pos + 12 <= buffer.byteLength) {
+    const length = view.getUint32(pos);
+    const type = ascii(bytes.slice(pos + 4, pos + 8));
+    const dataStart = pos + 8;
+    const dataEnd = dataStart + length;
+    const crc = view.getUint32(dataEnd);
+
+    if (dataEnd + 4 > buffer.byteLength) break;
+
+    const data = bytes.slice(dataStart, dataEnd);
+
+    chunks.push({
+      index: chunks.length + 1,
+      type,
+      length,
+      offset: pos,
+      crc: "0x" + crc.toString(16).padStart(8, "0").toUpperCase(),
+      detail: getChunkDetail(type, data)
+    });
+
+    pos = dataEnd + 4;
+
+    if (type === "IEND") break;
+  }
+
+  return chunks;
+}
+
+function getChunkDetail(type, data) {
+  if (type === "IHDR" && data.length >= 13) {
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    return [
+      `幅: ${view.getUint32(0)} px`,
+      `高さ: ${view.getUint32(4)} px`,
+      `ビット深度: ${data[8]}`,
+      `カラータイプ: ${data[9]}`,
+      `圧縮方式: ${data[10]}`,
+      `フィルター方式: ${data[11]}`,
+      `インターレース: ${data[12]}`
+    ].join("\n");
+  }
+
+  if (type === "tEXt") {
+    const zero = data.indexOf(0);
+    if (zero >= 0) {
+      const key = latin1(data.slice(0, zero));
+      const value = latin1(data.slice(zero + 1));
+      return `キーワード: ${key}\n値:\n${value}`;
+    }
+  }
+
+  if (type === "iTXt") {
+    return decodeTextLike(data);
+  }
+
+  if (type === "zTXt") {
+    return "zTXt: 圧縮テキストチャンクです。このサンプルでは展開表示していません。";
+  }
+
+  if (type === "pHYs" && data.length >= 9) {
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    const x = view.getUint32(0);
+    const y = view.getUint32(4);
+    const unit = data[8] === 1 ? "meter" : "unknown";
+
+    let dpi = "";
+    if (data[8] === 1) {
+      dpi = `\nDPI目安: X=${(x * 0.0254).toFixed(2)}, Y=${(y * 0.0254).toFixed(2)}`;
+    }
+
+    return `X pixels/unit: ${x}\nY pixels/unit: ${y}\n単位: ${unit}${dpi}`;
+  }
+
+  if (type === "tIME" && data.length === 7) {
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    return `更新日時: ${view.getUint16(0)}-${data[2]}-${data[3]} ${data[4]}:${data[5]}:${data[6]} UTC`;
+  }
+
+  if (type === "gAMA" && data.length === 4) {
+    const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    return `ガンマ値: ${view.getUint32(0) / 100000}`;
+  }
+
+  if (type === "sRGB" && data.length === 1) {
+    const names = ["Perceptual", "Relative colorimetric", "Saturation", "Absolute colorimetric"];
+    return `レンダリング意図: ${names[data[0]] || data[0]}`;
+  }
+
+  return "";
+}
+
+function decodeTextLike(data) {
+  try {
+    return new TextDecoder("utf-8").decode(data);
+  } catch {
+    return "";
+  }
+}
+
+function ascii(bytes) {
+  return Array.from(bytes).map(b => String.fromCharCode(b)).join("");
+}
+
+function latin1(bytes) {
+  return Array.from(bytes).map(b => String.fromCharCode(b)).join("");
+}
+
+function renderChunks(chunks) {
+  chunkTable.innerHTML = `
+    <thead>
+      <tr>
+        <th>選択</th>
+        <th>#</th>
+        <th>チャンク</th>
+        <th>長さ</th>
+        <th>位置</th>
+        <th>CRC</th>
+        <th>詳細</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${chunks.map(c => `
+        <tr>
+          <td><input type="checkbox" class="chunkCheck" data-index="${c.index - 1}"></td>
+          <td>${c.index}</td>
+          <td>${escapeHtml(c.type)}</td>
+          <td>${c.length}</td>
+          <td>${c.offset}</td>
+          <td>${c.crc}</td>
+          <td><pre>${escapeHtml(c.detail)}</pre></td>
+        </tr>
+      `).join("")}
+    </tbody>
+  `;
+}
+
+document.getElementById("copySelected").addEventListener("click", async () => {
+  const selected = [...document.querySelectorAll(".chunkCheck:checked")]
+    .map(cb => parsedChunks[Number(cb.dataset.index)]);
+
+  if (selected.length === 0) {
+    message.textContent = "コピーするチャンクを選択してください。";
+    return;
+  }
+
+  const text = selected.map(c =>
+`#${c.index} ${c.type}
+Length: ${c.length}
+Offset: ${c.offset}
+CRC: ${c.crc}
+${c.detail ? "Detail:\n" + c.detail : ""}`
+  ).join("\n\n---\n\n");
+
+  await navigator.clipboard.writeText(text);
+  message.textContent = "選択した情報をクリップボードにコピーしました。";
+});
+
+document.getElementById("selectAll").addEventListener("click", () => {
+  document.querySelectorAll(".chunkCheck").forEach(cb => cb.checked = true);
+});
+
+document.getElementById("clearSelect").addEventListener("click", () => {
+  document.querySelectorAll(".chunkCheck").forEach(cb => cb.checked = false);
+});
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, s => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[s]));
+}
+</script>
+
+</body>
+</html>
