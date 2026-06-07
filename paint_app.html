@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ローカルペイント v5</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#11151b;color:#eaf0fa}
+button,input,textarea{font:inherit}
+#app{height:100vh;display:grid;grid-template-columns:320px 1fr}
+#panel{background:#171d26;border-right:1px solid #323b4b;padding:12px;overflow:auto}
+h1{font-size:18px;margin:0 0 10px}
+h2{font-size:13px;margin:16px 0 8px;color:#b8c4d8}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:8px 0}
+button{border:1px solid #4b5a72;background:#273143;color:#eef5ff;border-radius:8px;padding:7px 10px;cursor:pointer}
+button:hover{filter:brightness(1.15)}
+button.active{background:#3467b9;border-color:#9fc4ff}
+.small{font-size:12px;line-height:1.55;color:#b8c4d8}
+#colorPicker{width:48px;height:34px;border:0;background:transparent}
+#sizeRange{width:100%}
+.sizeBtn{width:39px;height:30px;padding:2px}
+#metaText{width:100%;height:150px;background:#0d1118;color:#cfe2ff;border:1px solid #3a4659;border-radius:8px;padding:8px;font-family:ui-monospace,Consolas,monospace;font-size:11px;resize:vertical}
+#stage{
+  position:relative;height:100%;overflow:hidden;outline:none;
+  background-color:#22262d;
+  background-image:
+    linear-gradient(45deg,#171a1f 25%,transparent 25%),
+    linear-gradient(-45deg,#171a1f 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#171a1f 75%),
+    linear-gradient(-45deg,transparent 75%,#171a1f 75%);
+  background-size:32px 32px;
+  background-position:0 0,0 16px,16px -16px,-16px 0;
+}
+#world{position:absolute;left:0;top:0;transform-origin:0 0}
+canvas{position:absolute;left:0;top:0}
+#paintCanvas{z-index:1;background:transparent}
+#overlayCanvas{z-index:2;pointer-events:none}
+#brushCursor{display:none;position:fixed;border:1px solid white;border-radius:50%;box-shadow:0 0 0 1px black;pointer-events:none;z-index:50}
+#dropLayer{
+  display:none;position:absolute;inset:18px;border:3px dashed #8ebcff;border-radius:16px;
+  background:#0009;color:white;z-index:40;align-items:center;justify-content:center;
+  font-size:24px;font-weight:700;pointer-events:none;text-align:center
+}
+#stage.dragging #dropLayer{display:flex}
+#hint{position:absolute;right:12px;bottom:12px;z-index:10;background:#0009;color:#fff;border:1px solid #68758b;border-radius:8px;padding:10px;font-size:13px}
+#log{white-space:pre-wrap;background:#10151d;border:1px solid #334055;border-radius:8px;padding:8px;min-height:42px}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="panel">
+    <h1>ローカルペイント v5</h1>
+    <div class="small">HTML 1ファイルで動作します。PNG/JPEGを開けます。</div>
+
+    <h2>ファイル</h2>
+    <div class="row">
+      <button id="openButton" type="button">画像を開く</button>
+      <button id="newButton" type="button">新規</button>
+      <button id="saveButton" type="button">PNG保存</button>
+      <input id="fileInput" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" hidden>
+    </div>
+
+    <h2>ツール</h2>
+    <div class="row">
+      <button id="toolPen" type="button" class="active">ペン</button>
+      <button id="toolBlur" type="button">ぼかし</button>
+      <button id="toolEraser" type="button">消しゴム</button>
+      <button id="toolSelect" type="button">選択</button>
+    </div>
+
+    <h2>色</h2>
+    <div class="row">
+      <input id="colorPicker" type="color" value="#111111">
+      <span id="colorLabel">#111111</span>
+    </div>
+
+    <h2>ペンサイズ</h2>
+    <input id="sizeRange" type="range" min="1" max="100" value="10">
+    <div class="row">現在: <b id="sizeLabel">10</b> px</div>
+    <div id="sizeButtons" class="row"></div>
+
+    <h2>編集</h2>
+    <div class="row">
+      <button id="undoButton" type="button">元に戻す</button>
+      <button id="redoButton" type="button">やり直し</button>
+      <button id="trimButton" type="button">選択範囲外をトリミング</button>
+    </div>
+
+    <h2>ズーム</h2>
+    <div class="row">
+      <button id="zoom25Button" type="button">25%</button>
+      <button id="zoom50Button" type="button">50%</button>
+      <button id="zoom100Button" type="button">100%</button>
+      <button id="zoom200Button" type="button">200%</button>
+    </div>
+    <div class="small">現在: <b id="zoomLabel">100%</b><br>マウスホイール上: 拡大 / 下: 縮小</div>
+
+    <h2>操作</h2>
+    <div class="small">
+      Space + ドラッグ: キャンバス移動<br>
+      右クリック: スポイト<br>
+      Ctrl+Z: 元に戻す / Ctrl+Y: やり直し / Ctrl+S: PNG保存<br>
+      消しゴムは透明にします。
+    </div>
+
+    <h2>PNGメタ情報 / チャンク</h2>
+    <textarea id="metaText" readonly>PNG未読み込み</textarea>
+    <div class="small">v5: tEXt / iTXt / zTXt / eXIf のみ保持します。IDATはCanvasが生成したものだけを使い、重複を防ぎます。</div>
+
+    <h2>ログ</h2>
+    <div id="log" class="small">起動しました。Consoleエラーが出ないよう、id直接参照を使わず作成しています。</div>
+  </aside>
+
+  <main id="stage" tabindex="0">
+    <div id="world">
+      <canvas id="paintCanvas" width="900" height="600"></canvas>
+      <canvas id="overlayCanvas" width="900" height="600"></canvas>
+    </div>
+    <div id="dropLayer">PNG/JPEGをドロップして開く</div>
+    <div id="hint">ここへPNG/JPEGをドロップ</div>
+    <div id="brushCursor"></div>
+  </main>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+function $(id){
+  const el = document.getElementById(id);
+  if(!el) throw new Error("要素が見つかりません: " + id);
+  return el;
+}
+
+const el = {
+  stage: $("stage"),
+  world: $("world"),
+  paint: $("paintCanvas"),
+  overlay: $("overlayCanvas"),
+  cursor: $("brushCursor"),
+  openButton: $("openButton"),
+  newButton: $("newButton"),
+  saveButton: $("saveButton"),
+  fileInput: $("fileInput"),
+  colorPicker: $("colorPicker"),
+  colorLabel: $("colorLabel"),
+  sizeRange: $("sizeRange"),
+  sizeLabel: $("sizeLabel"),
+  sizeButtons: $("sizeButtons"),
+  metaText: $("metaText"),
+  log: $("log"),
+  undoButton: $("undoButton"),
+  redoButton: $("redoButton"),
+  trimButton: $("trimButton"),
+  zoomLabel: $("zoomLabel"),
+  zoom25Button: $("zoom25Button"),
+  zoom50Button: $("zoom50Button"),
+  zoom100Button: $("zoom100Button"),
+  zoom200Button: $("zoom200Button"),
+  toolPen: $("toolPen"),
+  toolBlur: $("toolBlur"),
+  toolEraser: $("toolEraser"),
+  toolSelect: $("toolSelect")
+};
+
+const ctx = el.paint.getContext("2d", {willReadFrequently:true});
+const octx = el.overlay.getContext("2d");
+
+const state = {
+  tool: "pen",
+  color: "#111111",
+  size: 10,
+  panX: 40,
+  panY: 40,
+  scale: 1,
+  space: false,
+  drawing: false,
+  panning: false,
+  selecting: false,
+  lastPoint: null,
+  selectStart: null,
+  selectRect: null,
+  undo: [],
+  redo: [],
+  keptChunks: [],
+  dragCounter: 0
+};
+
+function log(msg){
+  el.log.textContent = msg;
+}
+
+function setCanvasSize(w,h){
+  const oldW = el.paint.width;
+  const oldH = el.paint.height;
+  el.paint.width = Math.max(1, Math.floor(w));
+  el.paint.height = Math.max(1, Math.floor(h));
+  el.overlay.width = el.paint.width;
+  el.overlay.height = el.paint.height;
+  el.world.style.width = el.paint.width + "px";
+  el.world.style.height = el.paint.height + "px";
+  if(oldW !== el.paint.width || oldH !== el.paint.height) drawOverlay();
+}
+
+function updateTransform(){
+  el.world.style.transform = "translate(" + state.panX + "px," + state.panY + "px) scale(" + state.scale + ")";
+  el.zoomLabel.textContent = Math.round(state.scale * 100) + "%";
+}
+
+function zoomAt(clientX, clientY, newScale){
+  const oldScale = state.scale;
+  newScale = Math.max(0.05, Math.min(16, newScale));
+  if(Math.abs(newScale - oldScale) < 0.0001) return;
+
+  // 画面上のマウス位置を基準に、同じ画像上の点がマウス下に残るようpanを補正
+  const worldX = (clientX - state.panX) / oldScale;
+  const worldY = (clientY - state.panY) / oldScale;
+  state.scale = newScale;
+  state.panX = clientX - worldX * newScale;
+  state.panY = clientY - worldY * newScale;
+  updateTransform();
+  updateCursor();
+}
+
+function zoomToPercent(percent){
+  const rect = el.stage.getBoundingClientRect();
+  zoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, percent / 100);
+}
+
+function setTool(name){
+  state.tool = name;
+  const buttons = [el.toolPen, el.toolBlur, el.toolEraser, el.toolSelect];
+  buttons.forEach(b => b.classList.remove("active"));
+  if(name === "pen") el.toolPen.classList.add("active");
+  if(name === "blur") el.toolBlur.classList.add("active");
+  if(name === "eraser") el.toolEraser.classList.add("active");
+  if(name === "select") el.toolSelect.classList.add("active");
+  log("ツール: " + name);
+}
+
+function setSize(v){
+  state.size = Math.max(1, Math.min(100, Number(v) || 1));
+  el.sizeRange.value = String(state.size);
+  el.sizeLabel.textContent = String(state.size);
+}
+
+function makeSizeButtons(){
+  [1,2,3,5,8,10,12,16,20,24,32,40,50,64,80,100].forEach(v => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "sizeBtn";
+    b.textContent = String(v);
+    b.addEventListener("click", () => setSize(v));
+    el.sizeButtons.appendChild(b);
+  });
+}
+
+function canvasPoint(ev){
+  const r = el.paint.getBoundingClientRect();
+  return {
+    x: (ev.clientX - r.left) * (el.paint.width / r.width),
+    y: (ev.clientY - r.top) * (el.paint.height / r.height)
+  };
+}
+
+function pushUndo(){
+  try{
+    state.undo.push(ctx.getImageData(0,0,el.paint.width,el.paint.height));
+    if(state.undo.length > 30) state.undo.shift();
+    state.redo.length = 0;
+  }catch(err){
+    log("Undo保存に失敗: " + err.message);
+  }
+}
+
+function restoreImageData(img){
+  setCanvasSize(img.width, img.height);
+  ctx.putImageData(img,0,0);
+  drawOverlay();
+}
+
+function undo(){
+  if(state.undo.length <= 1) return;
+  const current = state.undo.pop();
+  state.redo.push(current);
+  restoreImageData(state.undo[state.undo.length - 1]);
+  log("元に戻しました");
+}
+
+function redo(){
+  if(state.redo.length === 0) return;
+  const img = state.redo.pop();
+  state.undo.push(img);
+  restoreImageData(img);
+  log("やり直しました");
+}
+
+function drawDot(p){
+  if(state.tool === "blur"){
+    blurAt(p.x,p.y);
+    return;
+  }
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = state.size;
+  if(state.tool === "eraser"){
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.strokeStyle = "rgba(0,0,0,1)";
+  }else{
+    ctx.globalCompositeOperation = "source-over";
+    ctx.strokeStyle = state.color;
+  }
+  ctx.beginPath();
+  ctx.moveTo(p.x,p.y);
+  ctx.lineTo(p.x + 0.01,p.y + 0.01);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawLine(a,b){
+  if(state.tool === "blur"){
+    blurAt(b.x,b.y);
+    return;
+  }
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = state.size;
+  if(state.tool === "eraser"){
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.strokeStyle = "rgba(0,0,0,1)";
+  }else{
+    ctx.globalCompositeOperation = "source-over";
+    ctx.strokeStyle = state.color;
+  }
+  ctx.beginPath();
+  ctx.moveTo(a.x,a.y);
+  ctx.lineTo(b.x,b.y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function blurAt(x,y){
+  const radius = Math.max(2, Math.floor(state.size / 2));
+  const sx = Math.max(0, Math.floor(x - radius));
+  const sy = Math.max(0, Math.floor(y - radius));
+  const sw = Math.min(el.paint.width - sx, radius * 2);
+  const sh = Math.min(el.paint.height - sy, radius * 2);
+  if(sw <= 2 || sh <= 2) return;
+  const img = ctx.getImageData(sx,sy,sw,sh);
+  const d = img.data;
+  const src = new Uint8ClampedArray(d);
+  for(let yy=1; yy<sh-1; yy++){
+    for(let xx=1; xx<sw-1; xx++){
+      let r=0,g=0,b=0,a=0,n=0;
+      for(let oy=-1; oy<=1; oy++){
+        for(let ox=-1; ox<=1; ox++){
+          const i = ((yy+oy)*sw + (xx+ox)) * 4;
+          r += src[i]; g += src[i+1]; b += src[i+2]; a += src[i+3]; n++;
+        }
+      }
+      const j = (yy*sw + xx) * 4;
+      d[j] = r/n; d[j+1] = g/n; d[j+2] = b/n; d[j+3] = a/n;
+    }
+  }
+  ctx.putImageData(img,sx,sy);
+}
+
+function drawOverlay(){
+  octx.clearRect(0,0,el.overlay.width,el.overlay.height);
+  const r = state.selectRect;
+  if(!r) return;
+  octx.save();
+  octx.setLineDash([6,4]);
+  octx.lineWidth = 1;
+  octx.strokeStyle = "#5db1ff";
+  octx.fillStyle = "rgba(80,160,255,0.12)";
+  octx.fillRect(r.x,r.y,r.w,r.h);
+  octx.strokeRect(r.x,r.y,r.w,r.h);
+  octx.restore();
+}
+
+function updateCursor(ev){
+  const diameter = Math.max(1, state.size * state.scale);
+  el.cursor.style.width = diameter + "px";
+  el.cursor.style.height = diameter + "px";
+  if(ev){
+    el.cursor.style.left = (ev.clientX - diameter / 2) + "px";
+    el.cursor.style.top = (ev.clientY - diameter / 2) + "px";
+  }
+}
+
+function isImageFile(file){
+  if(!file) return false;
+  const name = (file.name || "").toLowerCase();
+  return file.type === "image/png" || file.type === "image/jpeg" ||
+         name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg");
+}
+
+async function loadFile(file){
+  if(!isImageFile(file)){
+    alert("PNGまたはJPEGファイルを指定してください。");
+    return;
+  }
+  log("読み込み中: " + file.name);
+  const buffer = await file.arrayBuffer();
+  state.keptChunks = [];
+  if(file.type === "image/png" || file.name.toLowerCase().endsWith(".png")){
+    const chunks = parsePngChunks(new Uint8Array(buffer));
+    const keepTypes = new Set(["tEXt","iTXt","zTXt","eXIf"]);
+    state.keptChunks = chunks.filter(c => keepTypes.has(c.type));
+
+    const lines = [];
+    lines.push("v5保持対象: tEXt / iTXt / zTXt / eXIf のみ");
+    lines.push("IDATは保存時にCanvas生成分のみ使用します。");
+    lines.push("");
+    for(const c of chunks){
+      lines.push(c.type + "  " + c.data.length + " bytes" + (keepTypes.has(c.type) ? "  (保存時保持)" : "  (保存時除外)"));
+    }
+    el.metaText.value = lines.join("\n") || "PNGチャンクを解析できませんでした";
+  }else{
+    el.metaText.value = "JPEG読み込み: PNGチャンクはありません";
+  }
+
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    setCanvasSize(img.naturalWidth, img.naturalHeight);
+    ctx.clearRect(0,0,el.paint.width,el.paint.height);
+    ctx.drawImage(img,0,0);
+    URL.revokeObjectURL(url);
+    state.selectRect = null;
+    state.undo.length = 0;
+    state.redo.length = 0;
+    pushUndo();
+    drawOverlay();
+    log("読み込み完了: " + file.name + " / " + el.paint.width + "x" + el.paint.height);
+  };
+  img.onerror = () => {
+    URL.revokeObjectURL(url);
+    alert("画像を読み込めませんでした。");
+    log("画像読み込み失敗");
+  };
+  img.src = url;
+}
+
+function trimToSelection(){
+  const r = state.selectRect;
+  if(!r || r.w < 1 || r.h < 1){
+    alert("選択範囲がありません。");
+    return;
+  }
+  const x = Math.max(0, Math.floor(r.x));
+  const y = Math.max(0, Math.floor(r.y));
+  const w = Math.min(el.paint.width - x, Math.floor(r.w));
+  const h = Math.min(el.paint.height - y, Math.floor(r.h));
+  const img = ctx.getImageData(x,y,w,h);
+  setCanvasSize(w,h);
+  ctx.putImageData(img,0,0);
+  state.selectRect = null;
+  pushUndo();
+  drawOverlay();
+  log("トリミングしました");
+}
+
+function newCanvas(){
+  if(!confirm("新規キャンバスにしますか？")) return;
+  setCanvasSize(900,600);
+  ctx.clearRect(0,0,el.paint.width,el.paint.height);
+  state.selectRect = null;
+  state.keptChunks = [];
+  state.undo.length = 0;
+  state.redo.length = 0;
+  el.metaText.value = "PNG未読み込み";
+  pushUndo();
+  drawOverlay();
+  log("新規キャンバス");
+}
+
+/* PNG chunk functions */
+function parsePngChunks(bytes){
+  const sig = [137,80,78,71,13,10,26,10];
+  if(bytes.length < 8) return [];
+  for(let i=0;i<8;i++) if(bytes[i] !== sig[i]) return [];
+  let p = 8;
+  const out = [];
+  while(p + 12 <= bytes.length){
+    const len = ((bytes[p]<<24) | (bytes[p+1]<<16) | (bytes[p+2]<<8) | bytes[p+3]) >>> 0;
+    p += 4;
+    if(p + 4 + len + 4 > bytes.length) break;
+    const type = String.fromCharCode(bytes[p],bytes[p+1],bytes[p+2],bytes[p+3]);
+    p += 4;
+    const data = bytes.slice(p,p+len);
+    p += len;
+    const crc = bytes.slice(p,p+4);
+    p += 4;
+    out.push({type:type,data:data,crc:crc});
+    if(type === "IEND") break;
+  }
+  return out;
+}
+
+function u32(n){
+  return new Uint8Array([(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255]);
+}
+
+function concatArrays(arrs){
+  const len = arrs.reduce((s,a) => s + a.length, 0);
+  const out = new Uint8Array(len);
+  let p = 0;
+  for(const a of arrs){ out.set(a,p); p += a.length; }
+  return out;
+}
+
+const crcTable = (() => {
+  const table = [];
+  for(let n=0;n<256;n++){
+    let c = n;
+    for(let k=0;k<8;k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes){
+  let c = 0xffffffff;
+  for(let i=0;i<bytes.length;i++) c = crcTable[(c ^ bytes[i]) & 255] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function makeChunk(type,data){
+  const typeBytes = new TextEncoder().encode(type);
+  const crcBytes = concatArrays([typeBytes,data]);
+  return concatArrays([u32(data.length),typeBytes,data,u32(crc32(crcBytes))]);
+}
+
+function dataUrlToBytes(dataUrl){
+  const base64 = dataUrl.split(",")[1];
+  const bin = atob(base64);
+  const out = new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+function injectKeptChunks(pngBytes){
+  // v5: 保存時PNGを再解析し、IHDR直後にメタ情報チャンクだけを挿入する。
+  // IDATはCanvasが生成した新PNGのものだけを使うため、元PNG由来のIDAT重複は起きない。
+  const generated = parsePngChunks(pngBytes);
+  if(generated.length === 0 || state.keptChunks.length === 0) return pngBytes;
+
+  const keepTypes = new Set(["tEXt","iTXt","zTXt","eXIf"]);
+  const cleanKept = state.keptChunks.filter(c => keepTypes.has(c.type));
+
+  // 同一type+dataの重複を防ぐ
+  const seen = new Set();
+  const uniqueKept = [];
+  for(const c of cleanKept){
+    const key = c.type + ":" + Array.from(c.data).join(",");
+    if(!seen.has(key)){
+      seen.add(key);
+      uniqueKept.push(c);
+    }
+  }
+  if(uniqueKept.length === 0) return pngBytes;
+
+  const parts = [pngBytes.slice(0,8)];
+  for(const c of generated){
+    parts.push(makeChunk(c.type,c.data));
+    if(c.type === "IHDR"){
+      for(const k of uniqueKept){
+        parts.push(makeChunk(k.type,k.data));
+      }
+    }
+  }
+  return concatArrays(parts);
+}
+
+function savePng(){
+  const base = dataUrlToBytes(el.paint.toDataURL("image/png"));
+  const out = injectKeptChunks(base);
+  const blob = new Blob([out], {type:"image/png"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "paint_output.png";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  log("PNG保存しました");
+}
+
+/* pointer events */
+el.stage.addEventListener("contextmenu", ev => {
+  ev.preventDefault();
+  const p = canvasPoint(ev);
+  const x = Math.max(0, Math.min(el.paint.width - 1, Math.floor(p.x)));
+  const y = Math.max(0, Math.min(el.paint.height - 1, Math.floor(p.y)));
+  const d = ctx.getImageData(x,y,1,1).data;
+  const hex = "#" + [d[0],d[1],d[2]].map(v => v.toString(16).padStart(2,"0")).join("");
+  state.color = hex;
+  el.colorPicker.value = hex;
+  el.colorLabel.textContent = hex;
+  log("スポイト: " + hex);
+});
+
+el.stage.addEventListener("pointerdown", ev => {
+  el.stage.focus();
+  el.stage.setPointerCapture(ev.pointerId);
+  if(state.space || ev.button === 1){
+    state.panning = true;
+    state.lastPoint = {x:ev.clientX,y:ev.clientY};
+    ev.preventDefault();
+    return;
+  }
+  if(ev.button !== 0) return;
+  const p = canvasPoint(ev);
+  if(state.tool === "select"){
+    state.selecting = true;
+    state.selectStart = p;
+    state.selectRect = {x:p.x,y:p.y,w:0,h:0};
+    drawOverlay();
+    return;
+  }
+  state.drawing = true;
+  state.lastPoint = p;
+  drawDot(p);
+});
+
+el.stage.addEventListener("pointermove", ev => {
+  updateCursor(ev);
+  if(state.panning){
+    state.panX += ev.clientX - state.lastPoint.x;
+    state.panY += ev.clientY - state.lastPoint.y;
+    state.lastPoint = {x:ev.clientX,y:ev.clientY};
+    updateTransform();
+    return;
+  }
+  const p = canvasPoint(ev);
+  if(state.selecting){
+    state.selectRect = {
+      x: Math.min(state.selectStart.x,p.x),
+      y: Math.min(state.selectStart.y,p.y),
+      w: Math.abs(p.x - state.selectStart.x),
+      h: Math.abs(p.y - state.selectStart.y)
+    };
+    drawOverlay();
+    return;
+  }
+  if(state.drawing){
+    drawLine(state.lastPoint,p);
+    state.lastPoint = p;
+  }
+});
+
+function finishPointer(){
+  if(state.drawing || state.selecting) pushUndo();
+  state.drawing = false;
+  state.panning = false;
+  state.selecting = false;
+}
+el.stage.addEventListener("pointerup", finishPointer);
+el.stage.addEventListener("pointercancel", finishPointer);
+el.stage.addEventListener("pointerenter", ev => { el.cursor.style.display = "block"; updateCursor(ev); });
+el.stage.addEventListener("pointerleave", () => { el.cursor.style.display = "none"; });
+
+/* UI events */
+el.toolPen.addEventListener("click", () => setTool("pen"));
+el.toolBlur.addEventListener("click", () => setTool("blur"));
+el.toolEraser.addEventListener("click", () => setTool("eraser"));
+el.toolSelect.addEventListener("click", () => setTool("select"));
+
+el.colorPicker.addEventListener("input", ev => {
+  state.color = ev.target.value;
+  el.colorLabel.textContent = state.color;
+});
+el.sizeRange.addEventListener("input", ev => setSize(ev.target.value));
+el.undoButton.addEventListener("click", undo);
+el.redoButton.addEventListener("click", redo);
+el.trimButton.addEventListener("click", trimToSelection);
+el.newButton.addEventListener("click", newCanvas);
+el.saveButton.addEventListener("click", savePng);
+
+el.openButton.addEventListener("click", () => {
+  el.fileInput.click();
+});
+el.fileInput.addEventListener("change", () => {
+  const file = el.fileInput.files && el.fileInput.files[0];
+  if(file) loadFile(file);
+  el.fileInput.value = "";
+});
+
+el.zoom25Button.addEventListener("click", () => zoomToPercent(25));
+el.zoom50Button.addEventListener("click", () => zoomToPercent(50));
+el.zoom100Button.addEventListener("click", () => zoomToPercent(100));
+el.zoom200Button.addEventListener("click", () => zoomToPercent(200));
+
+el.stage.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  const factor = ev.deltaY < 0 ? 1.1 : 1 / 1.1;
+  zoomAt(ev.clientX, ev.clientY, state.scale * factor);
+}, {passive:false});
+
+document.addEventListener("keydown", ev => {
+  if(ev.code === "Space"){
+    state.space = true;
+    ev.preventDefault();
+  }
+  if(ev.ctrlKey && ev.key.toLowerCase() === "z"){
+    ev.preventDefault();
+    undo();
+  }
+  if(ev.ctrlKey && ev.key.toLowerCase() === "y"){
+    ev.preventDefault();
+    redo();
+  }
+  if(ev.ctrlKey && ev.key.toLowerCase() === "s"){
+    ev.preventDefault();
+    savePng();
+  }
+});
+document.addEventListener("keyup", ev => {
+  if(ev.code === "Space") state.space = false;
+});
+
+/* Drag & Drop.
+   windowのcapture段階で止めるため、画像ファイルが file:///... として開かれる挙動を抑止する。 */
+function stopFileOpen(ev){
+  ev.preventDefault();
+  ev.stopPropagation();
+  if(ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+}
+
+["dragenter","dragover","dragleave","drop"].forEach(type => {
+  window.addEventListener(type, ev => {
+    stopFileOpen(ev);
+    if(type === "dragenter"){
+      state.dragCounter++;
+      el.stage.classList.add("dragging");
+    }else if(type === "dragover"){
+      el.stage.classList.add("dragging");
+    }else if(type === "dragleave"){
+      state.dragCounter = Math.max(0, state.dragCounter - 1);
+      if(state.dragCounter === 0) el.stage.classList.remove("dragging");
+    }else if(type === "drop"){
+      state.dragCounter = 0;
+      el.stage.classList.remove("dragging");
+      const files = ev.dataTransfer && ev.dataTransfer.files ? Array.from(ev.dataTransfer.files) : [];
+      const file = files.find(isImageFile);
+      if(file) loadFile(file);
+      else if(files.length) alert("PNGまたはJPEGファイルをドロップしてください。");
+    }
+  }, true);
+});
+
+/* init */
+makeSizeButtons();
+setSize(10);
+setCanvasSize(900,600);
+updateTransform();
+pushUndo();
+log("v5起動完了。");
+
+window.addEventListener("error", ev => {
+  log("JavaScriptエラー: " + ev.message);
+});
+
+})();
+</script>
+</body>
+</html>
