@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>画像デコードツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0a0a0f; --bg2:#12121a; --bg3:#1a1a26;
+  --border:rgba(120,120,200,0.15); --border2:rgba(120,120,200,0.35);
+  --accent:#6c63ff; --accent2:#ff6584; --accent3:#43e97b;
+  --text:#e8e8f0; --text2:#8888aa;
+  --mono:'Space Mono',monospace; --sans:'Noto Sans JP',sans-serif;
+  --r:12px; --touch:48px;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{-webkit-text-size-adjust:100%;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(108,99,255,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(108,99,255,0.04) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0;}
+
+.wrap{position:relative;z-index:1;max-width:860px;margin:0 auto;padding:1.5rem 1rem 6rem;}
+
+header{text-align:center;margin-bottom:2.5rem;padding-top:1.5rem;}
+.logo{font-family:var(--mono);font-size:clamp(2rem,7vw,3.5rem);letter-spacing:0.3em;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:inline-block;}
+.tagline{font-family:var(--mono);font-size:clamp(0.55rem,2vw,0.7rem);color:var(--text2);letter-spacing:0.15em;margin-top:0.4rem;}
+
+.tabs{display:flex;gap:2px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);padding:4px;margin-bottom:1.5rem;}
+.tab{flex:1;padding:0.85rem 0.5rem;font-family:var(--mono);font-size:clamp(0.65rem,2.5vw,0.75rem);letter-spacing:0.05em;color:var(--text2);cursor:pointer;border-radius:9px;border:none;background:none;transition:all 0.2s;min-height:var(--touch);}
+.tab.active{background:var(--bg3);color:var(--accent);border:1px solid var(--border2);}
+.tab:hover:not(.active){color:var(--text);background:rgba(255,255,255,0.03);}
+.panel{display:none;}.panel.active{display:block;}
+
+.section-label{font-family:var(--mono);font-size:0.62rem;letter-spacing:0.18em;color:var(--accent);text-transform:uppercase;margin-bottom:0.65rem;display:flex;align-items:center;gap:0.5rem;}
+.section-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,var(--border2),transparent);}
+
+/* ── Big multi-drop zone ── */
+.big-drop{
+  border:2px dashed var(--border2);border-radius:14px;background:var(--bg2);
+  min-height:clamp(140px,25vw,190px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  cursor:pointer;transition:all 0.2s;position:relative;
+  font-family:var(--mono);font-size:0.72rem;color:var(--text2);gap:0.6rem;
+  text-align:center;padding:1.25rem;margin-bottom:1rem;
+}
+.big-drop:hover,.big-drop.dragover{border-color:var(--accent);background:rgba(108,99,255,0.07);color:var(--accent);}
+.big-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.big-drop .bd-icon{font-size:2rem;opacity:0.25;}
+.big-drop .bd-hint{font-size:0.62rem;color:var(--text2);margin-top:0.25rem;}
+.big-drop.has-files{border-style:solid;border-color:var(--accent3);}
+
+/* ── 4-slot mini grid ── */
+.slot-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:1.25rem;}
+@media(max-width:500px){.slot-grid{grid-template-columns:repeat(2,1fr);}}
+.slot-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;overflow:hidden;position:relative;aspect-ratio:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:var(--mono);font-size:0.6rem;color:var(--text2);transition:all 0.2s;}
+.slot-card.filled{border-color:var(--accent3);}
+.slot-card canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.8;}
+.slot-card .sn{font-size:1.4rem;font-weight:700;opacity:0.12;position:relative;z-index:1;}
+.slot-card .sl{position:relative;z-index:1;background:rgba(10,10,15,0.72);padding:2px 6px;border-radius:4px;font-size:0.55rem;color:var(--accent3);margin-top:2px;}
+.slot-card .sx{position:absolute;top:4px;right:4px;z-index:2;background:rgba(255,101,132,0.8);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:0.75rem;cursor:pointer;display:none;align-items:center;justify-content:center;line-height:1;}
+.slot-card.filled .sx{display:flex;}
+
+/* single drop */
+.secret-drop{border:2px dashed var(--accent2);background:rgba(255,101,132,0.04);min-height:clamp(120px,20vw,160px);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;position:relative;font-family:var(--mono);font-size:0.72rem;color:var(--text2);gap:0.5rem;text-align:center;padding:1rem;margin-bottom:1.25rem;border-radius:14px;}
+.secret-drop:hover,.secret-drop.dragover{border-color:var(--accent2);background:rgba(255,101,132,0.1);color:var(--accent2);}
+.secret-drop.filled{border-style:solid;border-color:var(--accent3);}
+.secret-drop input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.secret-drop canvas{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:12px;opacity:0.75;}
+.secret-drop .ov{position:relative;z-index:1;background:rgba(10,10,15,0.75);padding:3px 10px;border-radius:5px;font-size:0.6rem;color:var(--accent3);}
+
+/* stat */
+.stat-row{display:flex;gap:8px;margin-bottom:1.25rem;flex-wrap:wrap;}
+.stat{flex:1;min-width:90px;background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:0.65rem 0.85rem;}
+.stat .sv{font-family:var(--mono);font-size:clamp(0.85rem,3vw,1rem);color:var(--accent);}
+.stat .sk{font-family:var(--mono);font-size:0.55rem;color:var(--text2);margin-top:2px;}
+
+/* progress */
+.prog-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:0.5rem 0.85rem;font-family:var(--mono);font-size:0.62rem;color:var(--text2);margin-bottom:0.85rem;}
+.prog-track{height:3px;background:var(--bg3);border-radius:2px;margin-top:6px;}
+.prog-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,var(--accent),var(--accent3));width:0;transition:width 0.15s;}
+
+/* buttons */
+.btn{display:block;width:100%;padding:1rem 2rem;font-family:var(--mono);font-size:clamp(0.7rem,2.5vw,0.82rem);letter-spacing:0.12em;border-radius:10px;border:1px solid var(--border2);cursor:pointer;transition:all 0.2s;margin-bottom:0.85rem;min-height:var(--touch);}
+.btn-primary{background:linear-gradient(135deg,var(--accent),rgba(108,99,255,0.6));color:#fff;border-color:var(--accent);}
+.btn-primary:hover:not(:disabled){background:linear-gradient(135deg,#8880ff,var(--accent));}
+.btn-secondary{background:rgba(67,233,123,0.07);color:var(--accent3);border-color:rgba(67,233,123,0.3);}
+.btn-secondary:hover:not(:disabled){background:rgba(67,233,123,0.14);}
+.btn-dl{background:rgba(108,99,255,0.08);color:var(--accent);border-color:var(--border2);}
+.btn-dl:hover:not(:disabled){background:rgba(108,99,255,0.16);}
+.btn:disabled{opacity:0.35;cursor:not-allowed;}
+.btn-row{display:flex;gap:8px;margin-bottom:0.85rem;}
+.btn-row .btn{margin-bottom:0;}
+
+/* result grid */
+.result-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:1rem;}
+@media(max-width:400px){.result-grid{grid-template-columns:1fr;}}
+.result-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.result-card canvas{width:100%;display:block;max-height:180px;object-fit:cover;}
+.result-card .cf{padding:0.5rem 0.7rem;font-family:var(--mono);font-size:0.58rem;color:var(--text2);display:flex;justify-content:space-between;align-items:center;gap:6px;}
+.result-card a{color:var(--accent);text-decoration:none;border:1px solid var(--border2);padding:4px 10px;border-radius:5px;font-size:0.58rem;white-space:nowrap;min-height:32px;display:flex;align-items:center;}
+.result-card a:hover{background:rgba(108,99,255,0.12);}
+
+/* reveal */
+.reveal-wrap{background:var(--bg2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:1.25rem;display:none;}
+.reveal-wrap canvas{width:100%;display:block;}
+.reveal-wrap .rf{padding:0.7rem 1rem;font-family:var(--mono);font-size:0.62rem;color:var(--text2);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;}
+.reveal-wrap a{color:var(--accent3);text-decoration:none;border:1px solid rgba(67,233,123,0.3);padding:6px 14px;border-radius:6px;font-size:0.62rem;min-height:36px;display:flex;align-items:center;}
+
+/* log */
+.log{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:0.7rem 0.9rem;font-family:var(--mono);font-size:0.6rem;color:var(--text2);line-height:1.9;max-height:110px;overflow-y:auto;margin-bottom:0.85rem;}
+.log .ok{color:var(--accent3);} .log .err{color:var(--accent2);} .log .info{color:var(--accent);}
+
+footer-note{display:block;text-align:center;font-family:var(--mono);font-size:0.55rem;color:var(--text2);margin-top:2.5rem;opacity:0.4;line-height:2;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="logo">STEGA</div>
+  <div class="tagline">画像取り出し</div>
+</header>
+
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('decode')">▶ DECODE — 取り出す</button>
+</div>
+
+
+
+<!-- ═══ DECODE ═══ -->
+<div id="panel-decode" class="panel">
+  <div class="section-label">カバー画像 × 4枚をドロップ</div>
+
+  <div class="big-drop" id="dec-bigdrop"
+    ondragover="dov(event,'dec-bigdrop')" ondragleave="dol('dec-bigdrop')"
+    ondrop="multiDrop(event,'dec')">
+    <input type="file" accept="image/*" multiple onchange="multiFile(event,'dec')">
+    <div class="bd-icon">⊟</div>
+    <span>4枚まとめてドロップ or タップして選択</span>
+    <div class="bd-hint">順序はメタデータで自動判別</div>
+  </div>
+
+  <div class="slot-grid" id="dec-slots">
+    <div class="slot-card" id="dc-0"><div class="sn">1</div><span style="font-size:0.58rem;position:relative;z-index:1;">カバー1</span><button class="sx" onclick="clearSlot('dec',0)" title="削除">✕</button></div>
+    <div class="slot-card" id="dc-1"><div class="sn">2</div><span style="font-size:0.58rem;position:relative;z-index:1;">カバー2</span><button class="sx" onclick="clearSlot('dec',1)" title="削除">✕</button></div>
+    <div class="slot-card" id="dc-2"><div class="sn">3</div><span style="font-size:0.58rem;position:relative;z-index:1;">カバー3</span><button class="sx" onclick="clearSlot('dec',2)" title="削除">✕</button></div>
+    <div class="slot-card" id="dc-3"><div class="sn">4</div><span style="font-size:0.58rem;position:relative;z-index:1;">カバー4</span><button class="sx" onclick="clearSlot('dec',3)" title="削除">✕</button></div>
+  </div>
+
+  <div class="prog-wrap" id="dec-prog" style="display:none">
+    <span id="dec-lbl">解析中...</span>
+    <div class="prog-track"><div class="prog-fill" id="dec-bar"></div></div>
+  </div>
+  <div class="log" id="dec-log" style="display:none"></div>
+
+  <button class="btn btn-secondary" id="dec-btn" onclick="runDecode()" disabled>画像を取り出す</button>
+
+  <div class="reveal-wrap" id="reveal-wrap">
+    <canvas id="reveal-canvas"></canvas>
+    <div class="rf">
+      <span id="reveal-info">—</span>
+      <a id="reveal-dl" href="#" download="secret_revealed.png">PNG保存</a>
+    </div>
+  </div>
+</div>
+
+<footer-note>
+  ブラウザ完結処理 — サーバー送信なし
+</footer-note>
+</div>
+
+<script>
+// ── State ──
+const coverImgs = [null,null,null,null];
+const decImgs   = [null,null,null,null];
+let secretImg   = null;
+const resultURLs = [null,null,null,null]; // for ZIP download
+const MAGIC = 0x53544547;
+const BITS_PER_CH = 4;
+
+// ── Tab ──
+function switchTab(t){
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',['encode','decode'][i]===t));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.getElementById('panel-'+t).classList.add('active');
+}
+
+// ── Drag helpers ──
+function dov(e,id){e.preventDefault();document.getElementById(id).classList.add('dragover');}
+function dol(id){document.getElementById(id).classList.remove('dragover');}
+
+// ── Multi drop (cover or dec) ──
+function multiDrop(e, type){
+  e.preventDefault();
+  const id = type==='cover'?'enc-bigdrop':'dec-bigdrop';
+  dol(id);
+  loadMultipleFiles([...e.dataTransfer.files], type);
+}
+function multiFile(e, type){
+  loadMultipleFiles([...e.target.files], type);
+  e.target.value=''; // reset so same files can be re-selected
+}
+function loadMultipleFiles(files, type){
+  const imgs = type==='cover'?coverImgs:decImgs;
+  const prefix = type==='cover'?'ec':'dc';
+  const imgFiles = files.filter(f=>f.type.startsWith('image/')).slice(0,4);
+  // Fill empty slots first, then overwrite from slot 0
+  let targets = [];
+  for(let i=0;i<4;i++) if(imgs[i]===null) targets.push(i);
+  if(targets.length < imgFiles.length){
+    // not enough empty slots — fill all 4 from beginning
+    targets = [0,1,2,3].slice(0,imgFiles.length);
+  }
+  imgFiles.forEach((f,fi)=>{
+    if(fi < targets.length) loadOneFile(f, type, targets[fi]);
+  });
+  // mark big drop zone
+  const bd = document.getElementById(type==='cover'?'enc-bigdrop':'dec-bigdrop');
+  bd.classList.add('has-files');
+}
+
+// Single secret drop
+function singleDrop(e, type){
+  e.preventDefault(); dol('secret-drop');
+  const f = e.dataTransfer.files[0];
+  if(f && f.type.startsWith('image/')) loadOneFile(f, 'secret', 0);
+}
+function singleFile(e, type){
+  const f = e.target.files[0];
+  if(f) loadOneFile(f, 'secret', 0);
+  e.target.value='';
+}
+
+function loadOneFile(file, type, idx){
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = ()=>{
+    img._file = file;
+    if(type==='cover'){
+      coverImgs[idx]=img;
+      renderSlotThumb('ec-'+idx, img, file);
+      checkEncodeReady();
+    } else if(type==='dec'){
+      decImgs[idx]=img;
+      renderSlotThumb('dc-'+idx, img, file);
+      checkDecodeReady();
+    } else {
+      secretImg=img;
+      renderSecretThumb(img, file);
+      checkEncodeReady();
+    }
+    URL.revokeObjectURL(url);
+  };
+  img.src=url;
+}
+
+function renderSlotThumb(id, img, file){
+  const card = document.getElementById(id);
+  card.classList.add('filled');
+  let cv = card.querySelector('canvas');
+  if(!cv){cv=document.createElement('canvas');card.prepend(cv);}
+  const W=card.offsetWidth||100, H=card.offsetHeight||100;
+  cv.width=W; cv.height=H;
+  const ctx=cv.getContext('2d');
+  const sc=Math.min(W/img.width,H/img.height);
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(img,(W-img.width*sc)/2,(H-img.height*sc)/2,img.width*sc,img.height*sc);
+  let lb = card.querySelector('.sl');
+  if(!lb){lb=document.createElement('div');lb.className='sl';card.appendChild(lb);}
+  lb.textContent=`${img.width}×${img.height}`;
+}
+function renderSecretThumb(img, file){
+  const drop = document.getElementById('secret-drop');
+  drop.classList.add('filled');
+  let cv = drop.querySelector('canvas');
+  if(!cv){cv=document.createElement('canvas');drop.prepend(cv);}
+  cv.width=drop.offsetWidth||200; cv.height=drop.offsetHeight||140;
+  const ctx=cv.getContext('2d');
+  const W=cv.width,H=cv.height;
+  const sc=Math.min(W/img.width,H/img.height);
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(img,(W-img.width*sc)/2,(H-img.height*sc)/2,img.width*sc,img.height*sc);
+  let ov=drop.querySelector('.ov');
+  if(!ov){ov=document.createElement('div');ov.className='ov';drop.appendChild(ov);}
+  ov.textContent=`${img.width}×${img.height} | ${fmtBytes(file.size)}`;
+  // hide placeholder text
+  drop.querySelectorAll('span,div:not(.ov):not(.sx)').forEach(el=>{if(!el.classList.contains('ov'))el.style.display='none';});
+}
+
+function clearSlot(type, idx){
+  if(type==='cover'){
+    coverImgs[idx]=null;
+    resetSlotCard('ec-'+idx, idx+1, `カバー${idx+1}`);
+    checkEncodeReady();
+  } else {
+    decImgs[idx]=null;
+    resetSlotCard('dc-'+idx, idx+1, `カバー${idx+1}`);
+    checkDecodeReady();
+  }
+}
+function resetSlotCard(id, num, label){
+  const card=document.getElementById(id);
+  card.classList.remove('filled');
+  card.innerHTML=`<div class="sn">${num}</div><span style="font-size:0.58rem;position:relative;z-index:1;">${label}</span><button class="sx" onclick="clearSlot('${id.startsWith('ec')?'cover':'dec'}',${num-1})" title="削除">✕</button>`;
+}
+
+function checkEncodeReady(){
+  const ok = coverImgs.every(x=>x) && secretImg;
+  document.getElementById('enc-btn').disabled = !ok;
+  if(ok) updateStats();
+}
+function checkDecodeReady(){
+  document.getElementById('dec-btn').disabled = !decImgs.every(x=>x);
+}
+
+function updateStats(){
+  const cap = coverImgs.reduce((s,img)=>s+(img?img.width*img.height*3*4/8:0),0);
+  document.getElementById('s-cap').textContent=fmtBytes(cap);
+  document.getElementById('s-sec').textContent=secretImg?fmtBytes(secretImg._file.size):'—';
+  const ok = secretImg && secretImg._file.size <= cap-64;
+  document.getElementById('s-ok').textContent=ok?'✓ OK':'✗ 容量超過';
+  document.getElementById('s-ok').style.color=ok?'var(--accent3)':'var(--accent2)';
+  document.getElementById('enc-stats').style.display='flex';
+}
+function fmtBytes(b){return b>1048576?`${(b/1048576).toFixed(1)}MB`:`${(b/1024).toFixed(0)}KB`;}
+
+// ── ENCODE ──
+async function runEncode(){
+  const btn=document.getElementById('enc-btn'); btn.disabled=true;
+  const pg=document.getElementById('enc-prog'); pg.style.display='block';
+  const bar=document.getElementById('enc-bar'), lbl=document.getElementById('enc-lbl');
+  setBar(bar,5,lbl,'秘密画像をPNGエンコード中...');
+
+  const secBytes = await imgToPngBytes(secretImg);
+  const cap = coverImgs.reduce((s,img)=>s+img.width*img.height*3*4/8,0);
+  if(secBytes.length+64 > cap){
+    alert(`容量不足: ${fmtBytes(secBytes.length)} > 空き ${fmtBytes(cap)}`);
+    pg.style.display='none'; btn.disabled=false; return;
+  }
+
+  const header = new Uint8Array(64);
+  new DataView(header.buffer).setUint32(0,MAGIC,false);
+  new DataView(header.buffer).setUint32(4,secBytes.length,false);
+  const payload = new Uint8Array(64+secBytes.length);
+  payload.set(header,0); payload.set(secBytes,64);
+
+  const sessionId = crypto.getRandomValues(new Uint8Array(4));
+  const bytesPerCover = Math.ceil(payload.length/4);
+  const results=[];
+
+  for(let i=0;i<4;i++){
+    setBar(bar,10+i*18,lbl,`カバー${i+1}/4 埋め込み中...`);
+    const start=i*bytesPerCover, end=Math.min(start+bytesPerCover,payload.length);
+    const chunk=payload.slice(start,end);
+    const imgData=imgToData(coverImgs[i]);
+    embedChunk(imgData,chunk,sessionId,i,4);
+    results.push({imgData,w:coverImgs[i].width,h:coverImgs[i].height});
+    await sleep(10);
+  }
+
+  setBar(bar,85,lbl,'出力PNG生成中...');
+  const resGrid=document.getElementById('result-grid'); resGrid.innerHTML='';
+  for(let i=0;i<4;i++) resultURLs[i]=null;
+
+  for(let i=0;i<4;i++){
+    const {imgData,w,h}=results[i];
+    const url=await idataToPngUrl(imgData,w,h);
+    resultURLs[i]=url;
+    const card=document.createElement('div'); card.className='result-card';
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
+    cv.getContext('2d').putImageData(imgData,0,0);
+    const footer=document.createElement('div'); footer.className='cf';
+    const sp=document.createElement('span'); sp.textContent=`COVER ${i+1}`;
+    const a=document.createElement('a'); a.textContent='PNG保存';
+    a.href=url; a.download=`stega_cover_${i+1}.png`;
+    footer.appendChild(sp); footer.appendChild(a);
+    card.appendChild(cv); card.appendChild(footer);
+    resGrid.appendChild(card);
+    setBar(bar,85+(i+1)*3,lbl,`出力 ${i+1}/4 完了`);
+    await sleep(10);
+  }
+  document.getElementById('result-section').style.display='block';
+  setBar(bar,100,lbl,'✓ 完了！');
+  setTimeout(()=>{pg.style.display='none'; btn.disabled=false;},1400);
+}
+
+// ── ZIP Download ──
+async function downloadAll(){
+  const btn=document.getElementById('dl-all-btn');
+  btn.disabled=true; btn.textContent='ZIP作成中...';
+  try{
+    const files=[];
+    for(let i=0;i<4;i++){
+      if(!resultURLs[i]) continue;
+      const resp=await fetch(resultURLs[i]);
+      const buf=await resp.arrayBuffer();
+      files.push({name:`stega_cover_${i+1}.png`, data:new Uint8Array(buf)});
+    }
+    const zip=buildZip(files);
+    const blob=new Blob([zip],{type:'application/zip'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download='stega_covers.zip'; a.click();
+  }catch(e){alert('ZIP生成エラー: '+e);}
+  btn.disabled=false; btn.textContent='⬇ 4枚まとめてダウンロード（ZIP）';
+}
+
+// ── Pure-JS minimal ZIP builder ──
+function buildZip(files){
+  const enc=s=>new TextEncoder().encode(s);
+  const u32le=(n)=>{const b=new Uint8Array(4);new DataView(b.buffer).setUint32(0,n,true);return b;}
+  const u16le=(n)=>{const b=new Uint8Array(2);new DataView(b.buffer).setUint16(0,n,true);return b;}
+  const concat=(...arrs)=>{const t=arrs.reduce((s,a)=>s+a.length,0),r=new Uint8Array(t);let o=0;arrs.forEach(a=>{r.set(a,o);o+=a.length;});return r;}
+  // CRC32
+  const crcTable=(()=>{const t=new Uint32Array(256);for(let i=0;i<256;i++){let c=i;for(let j=0;j<8;j++)c=c&1?(0xEDB88320^(c>>>1)):(c>>>1);t[i]=c;}return t;})();
+  const crc32=(buf)=>{let c=0xFFFFFFFF;for(let i=0;i<buf.length;i++)c=crcTable[(c^buf[i])&0xFF]^(c>>>8);return(c^0xFFFFFFFF)>>>0;};
+
+  const now=new Date();
+  const dosDate=(now.getFullYear()-1980)<<9|((now.getMonth()+1)<<5)|now.getDate();
+  const dosTime=(now.getHours()<<11)|(now.getMinutes()<<5)|(now.getSeconds()>>1);
+
+  const localHeaders=[];
+  const centralHeaders=[];
+  let offset=0;
+
+  for(const f of files){
+    const nameBytes=enc(f.name);
+    const crc=crc32(f.data);
+    const local=concat(
+      new Uint8Array([0x50,0x4B,0x03,0x04]),// sig
+      u16le(20),u16le(0),u16le(0),           // version, flags, method(stored)
+      u16le(dosTime),u16le(dosDate),
+      u32le(crc),u32le(f.data.length),u32le(f.data.length),
+      u16le(nameBytes.length),u16le(0),       // name len, extra len
+      nameBytes, f.data
+    );
+    const central=concat(
+      new Uint8Array([0x50,0x4B,0x01,0x02]),
+      u16le(20),u16le(20),u16le(0),u16le(0),
+      u16le(dosTime),u16le(dosDate),
+      u32le(crc),u32le(f.data.length),u32le(f.data.length),
+      u16le(nameBytes.length),u16le(0),u16le(0),u16le(0),u16le(0),
+      u32le(0),u32le(offset),
+      nameBytes
+    );
+    localHeaders.push(local);
+    centralHeaders.push(central);
+    offset+=local.length;
+  }
+
+  const centralDir=concat(...centralHeaders);
+  const eocd=concat(
+    new Uint8Array([0x50,0x4B,0x05,0x06]),
+    u16le(0),u16le(0),
+    u16le(files.length),u16le(files.length),
+    u32le(centralDir.length),u32le(offset),
+    u16le(0)
+  );
+  return concat(...localHeaders, centralDir, eocd);
+}
+
+// ── DECODE ──
+async function runDecode(){
+  const btn=document.getElementById('dec-btn'); btn.disabled=true;
+  const pg=document.getElementById('dec-prog'); pg.style.display='block';
+  const bar=document.getElementById('dec-bar'), lbl=document.getElementById('dec-lbl');
+  const log=document.getElementById('dec-log'); log.style.display='block'; log.innerHTML='';
+  const addLog=(m,c='')=>{ log.innerHTML+=`<div class="${c}">${m}</div>`; log.scrollTop=9999; };
+
+  addLog('[INFO] カバー画像を解析中...','info');
+  const slots=[];
+  for(let i=0;i<4;i++){
+    setBar(bar,(i+1)*13,lbl,`画像${i+1}解析中...`);
+    const imgData=imgToData(decImgs[i]);
+    const info=readMeta(imgData);
+    addLog(`画像${i+1}: ID=${bufToHex(info.sessionId)} slot=${info.slotIdx}/${info.totalSlots} ${fmtBytes(info.chunkLen)}`,'info');
+    slots.push({idx:info.slotIdx,chunkLen:info.chunkLen,imgData,sessionId:info.sessionId});
+    await sleep(10);
+  }
+
+  const sid=slots[0].sessionId;
+  for(let i=1;i<4;i++){
+    if(!arrEq(sid,slots[i].sessionId)){
+      addLog(`✗ セッションID不一致 (画像${i+1}) — 別セットが混在`,'err');
+      btn.disabled=false; pg.style.display='none'; return;
+    }
+  }
+  addLog('✓ セッションID一致','ok');
+  slots.sort((a,b)=>a.idx-b.idx);
+  setBar(bar,60,lbl,'データ抽出中...');
+
+  const chunks=[];
+  for(const sl of slots){
+    chunks.push(extractChunk(sl.imgData,sl.chunkLen));
+    addLog(`スロット${sl.idx+1}: ${fmtBytes(sl.chunkLen)} 抽出`,'ok');
+    await sleep(10);
+  }
+  setBar(bar,80,lbl,'結合・検証中...');
+
+  const total=chunks.reduce((s,c)=>s+c.length,0);
+  const combined=new Uint8Array(total);
+  let off=0; for(const c of chunks){combined.set(c,off);off+=c.length;}
+
+  const hv=new DataView(combined.buffer);
+  if(hv.getUint32(0,false)!==MAGIC){
+    addLog(`✗ マジック不一致 — このSTEGAで作成した画像ではない可能性`,'err');
+    btn.disabled=false; pg.style.display='none'; return;
+  }
+  const secLen=hv.getUint32(4,false);
+  addLog(`✓ ヘッダー確認: ${fmtBytes(secLen)}`,'ok');
+  setBar(bar,90,lbl,'画像復元中...');
+
+  try{
+    const blob=new Blob([combined.slice(64,64+secLen)],{type:'image/png'});
+    const url=URL.createObjectURL(blob);
+    const img=new Image();
+    img.onload=()=>{
+      const rw=document.getElementById('reveal-wrap'); rw.style.display='block';
+      const rc=document.getElementById('reveal-canvas');
+      rc.width=img.width; rc.height=img.height;
+      rc.getContext('2d').drawImage(img,0,0);
+      document.getElementById('reveal-info').textContent=`${img.width}×${img.height} | ${fmtBytes(secLen)}`;
+      document.getElementById('reveal-dl').href=url;
+      setBar(bar,100,lbl,'✓ 画像を取り出しました！');
+      addLog('🎉 復元完了！','ok');
+      setTimeout(()=>{pg.style.display='none'; btn.disabled=false;},1400);
+    };
+    img.onerror=()=>{addLog('✗ PNG復元失敗','err'); btn.disabled=false; pg.style.display='none';};
+    img.src=url;
+  }catch(e){addLog('✗ エラー: '+e,'err'); btn.disabled=false; pg.style.display='none';}
+}
+
+// ── Core steg ──
+function imgToData(img){
+  const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
+  c.getContext('2d').drawImage(img,0,0);
+  return c.getContext('2d').getImageData(0,0,c.width,c.height);
+}
+function embedChunk(imgData,chunk,sessionId,slotIdx,totalSlots){
+  const d=imgData.data, px=imgData.width*imgData.height;
+  const meta=new Uint8Array(10);
+  meta.set(sessionId,0); meta[4]=slotIdx; meta[5]=totalSlots;
+  new DataView(meta.buffer).setUint32(6,chunk.length,false);
+  for(let p=0;p<Math.min(px,256);p++){
+    const mb=meta[p%meta.length];
+    d[p*4+3]=(d[p*4+3]&0xF0)|(mb&0x0F);
+    if(p+256<px) d[(p+256)*4+3]=(d[(p+256)*4+3]&0xF0)|((mb>>4)&0x0F);
+  }
+  const startPx=512; let bitPos=0; const totalBits=chunk.length*8;
+  for(let p=startPx;p<px&&bitPos<totalBits;p++){
+    for(let ch=0;ch<3&&bitPos<totalBits;ch++){
+      let nibble=0;
+      for(let b=0;b<BITS_PER_CH;b++){
+        const bi=Math.floor(bitPos/8), bit=7-(bitPos%8);
+        if(bi<chunk.length) nibble|=(((chunk[bi]>>bit)&1)<<(BITS_PER_CH-1-b));
+        bitPos++;
+      }
+      d[p*4+ch]=(d[p*4+ch]&0xF0)|nibble;
+    }
+  }
+}
+function readMeta(imgData){
+  const d=imgData.data, px=imgData.width*imgData.height;
+  const raw=new Uint8Array(10);
+  for(let p=0;p<Math.min(px,256);p++){
+    const lo=d[p*4+3]&0x0F;
+    const hi=p+256<px?(d[(p+256)*4+3]&0x0F)<<4:0;
+    if(p<10) raw[p]=hi|lo;
+  }
+  const mv=new DataView(raw.buffer);
+  return{sessionId:raw.slice(0,4),slotIdx:raw[4],totalSlots:raw[5],chunkLen:mv.getUint32(6,false)};
+}
+function extractChunk(imgData,chunkLen){
+  const d=imgData.data, px=imgData.width*imgData.height;
+  const chunk=new Uint8Array(chunkLen);
+  let bitPos=0; const totalBits=chunkLen*8;
+  for(let p=512;p<px&&bitPos<totalBits;p++){
+    for(let ch=0;ch<3&&bitPos<totalBits;ch++){
+      const nibble=d[p*4+ch]&0x0F;
+      for(let b=0;b<BITS_PER_CH;b++){
+        const bi=Math.floor(bitPos/8),bit=7-(bitPos%8);
+        if(bi<chunkLen) chunk[bi]|=(((nibble>>(BITS_PER_CH-1-b))&1)<<bit);
+        bitPos++;
+      }
+    }
+  }
+  return chunk;
+}
+
+// ── Utils ──
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function bufToHex(buf){return Array.from(buf).map(b=>b.toString(16).padStart(2,'0')).join('');}
+function arrEq(a,b){return a.length===b.length&&a.every((v,i)=>v===b[i]);}
+function setBar(bar,pct,lbl,msg){bar.style.width=pct+'%'; if(lbl&&msg)lbl.textContent=msg;}
+async function imgToPngBytes(img){
+  const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
+  c.getContext('2d').drawImage(img,0,0);
+  const blob=await new Promise(r=>c.toBlob(r,'image/png'));
+  return new Uint8Array(await blob.arrayBuffer());
+}
+async function idataToPngUrl(imgData,w,h){
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  c.getContext('2d').putImageData(imgData,0,0);
+  const blob=await new Promise(r=>c.toBlob(r,'image/png'));
+  return URL.createObjectURL(blob);
+}
+</script>
+</body>
+</html>
