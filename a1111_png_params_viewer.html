@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>PNG Parameters Viewer(A1111)</title>
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  margin: 20px;
+  background: #f6f6f6;
+}
+#dropZone {
+  border: 3px dashed #888;
+  border-radius: 12px;
+  padding: 40px;
+  text-align: center;
+  background: #fff;
+  cursor: pointer;
+}
+#dropZone.dragover {
+  background: #e8f2ff;
+  border-color: #2678d9;
+}
+.card {
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 10px;
+  margin-top: 16px;
+  padding: 14px;
+}
+.item {
+  border-top: 1px solid #ddd;
+  padding: 10px 0;
+}
+.item:first-child {
+  border-top: none;
+}
+.label {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+.value {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #f3f3f3;
+  padding: 8px;
+  border-radius: 6px;
+}
+button {
+  margin-top: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+#message {
+  margin-top: 12px;
+  font-weight: bold;
+}
+textarea {
+  width: 100%;
+  height: 180px;
+}
+</style>
+</head>
+<body>
+
+<h1>PNG Parameters Viewer(A1111)</h1>
+
+<div id="dropZone">
+  PNG画像をここへドラッグ＆ドロップ<br>
+  またはクリックして選択
+</div>
+
+<input id="fileInput" type="file" accept="image/png" hidden>
+
+<div id="message"></div>
+
+<div class="card">
+  <h2>抽出結果</h2>
+  <div id="result"></div>
+</div>
+
+<div class="card">
+  <h2>元の parameters</h2>
+  <textarea id="rawText" readonly></textarea>
+  <br>
+  <button onclick="copyText(rawText.value)">元テキストをコピー</button>
+</div>
+
+<script>
+const dropZone = document.getElementById("dropZone");
+const fileInput = document.getElementById("fileInput");
+const message = document.getElementById("message");
+const result = document.getElementById("result");
+const rawText = document.getElementById("rawText");
+
+dropZone.addEventListener("click", () => fileInput.click());
+
+fileInput.addEventListener("change", () => {
+  if (fileInput.files.length > 0) {
+    handleFile(fileInput.files[0]);
+  }
+});
+
+dropZone.addEventListener("dragover", e => {
+  e.preventDefault();
+  dropZone.classList.add("dragover");
+});
+
+dropZone.addEventListener("dragleave", () => {
+  dropZone.classList.remove("dragover");
+});
+
+dropZone.addEventListener("drop", e => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+
+  const file = e.dataTransfer.files[0];
+  if (file) handleFile(file);
+});
+
+async function handleFile(file) {
+  message.textContent = "";
+  result.innerHTML = "";
+  rawText.value = "";
+
+  if (!file.name.toLowerCase().endsWith(".png")) {
+    message.textContent = "PNGファイルを選択してください。";
+    return;
+  }
+
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  if (!isPng(bytes)) {
+    message.textContent = "PNG形式ではありません。";
+    return;
+  }
+
+  const textChunks = parsePngTextChunks(buffer);
+  const parameters = findParameters(textChunks);
+
+  if (!parameters) {
+    message.textContent = "Automatic1111 の parameters が見つかりませんでした。";
+    return;
+  }
+
+  rawText.value = parameters;
+
+  const parsed = parseA1111Parameters(parameters);
+  renderItems(parsed);
+
+  message.textContent = "parameters を抽出しました。";
+}
+
+function isPng(bytes) {
+  const sig = [137, 80, 78, 71, 13, 10, 26, 10];
+  return sig.every((v, i) => bytes[i] === v);
+}
+
+function parsePngTextChunks(buffer) {
+  const view = new DataView(buffer);
+  const bytes = new Uint8Array(buffer);
+  const chunks = [];
+  let pos = 8;
+
+  while (pos + 12 <= buffer.byteLength) {
+    const length = view.getUint32(pos);
+    const type = ascii(bytes.slice(pos + 4, pos + 8));
+    const dataStart = pos + 8;
+    const dataEnd = dataStart + length;
+
+    if (dataEnd + 4 > buffer.byteLength) break;
+
+    const data = bytes.slice(dataStart, dataEnd);
+
+    if (type === "tEXt") {
+      const zero = data.indexOf(0);
+      if (zero >= 0) {
+        const key = latin1(data.slice(0, zero));
+        const value = latin1(data.slice(zero + 1));
+        chunks.push({ type, key, value });
+      }
+    }
+
+    if (type === "iTXt") {
+      const parsed = parseITXt(data);
+      if (parsed) chunks.push({ type, key: parsed.key, value: parsed.value });
+    }
+
+    pos = dataEnd + 4;
+    if (type === "IEND") break;
+  }
+
+  return chunks;
+}
+
+function parseITXt(data) {
+  try {
+    let p = 0;
+
+    const keyEnd = data.indexOf(0, p);
+    if (keyEnd < 0) return null;
+    const key = latin1(data.slice(p, keyEnd));
+    p = keyEnd + 1;
+
+    const compressionFlag = data[p++];
+    const compressionMethod = data[p++];
+
+    const langEnd = data.indexOf(0, p);
+    if (langEnd < 0) return null;
+    p = langEnd + 1;
+
+    const translatedEnd = data.indexOf(0, p);
+    if (translatedEnd < 0) return null;
+    p = translatedEnd + 1;
+
+    const textData = data.slice(p);
+
+    if (compressionFlag !== 0) {
+      return {
+        key,
+        value: "[圧縮された iTXt です。このサンプルでは展開していません。]"
+      };
+    }
+
+    return {
+      key,
+      value: new TextDecoder("utf-8").decode(textData)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function findParameters(chunks) {
+  for (const c of chunks) {
+    if (String(c.key).toLowerCase() === "parameters") {
+      return c.value;
+    }
+  }
+
+  for (const c of chunks) {
+    if (
+      c.value.includes("Negative prompt:") ||
+      c.value.includes("Steps:") ||
+      c.value.includes("Sampler:")
+    ) {
+      return c.value;
+    }
+  }
+
+  return "";
+}
+
+function parseA1111Parameters(text) {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+
+  let prompt = "";
+  let negativePrompt = "";
+  let settingsText = "";
+
+  const negIndex = lines.findIndex(line => line.startsWith("Negative prompt:"));
+
+  if (negIndex >= 0) {
+    prompt = lines.slice(0, negIndex).join("\n").trim();
+
+    const afterNeg = lines.slice(negIndex).join("\n");
+    const stepsIndex = afterNeg.indexOf("\nSteps:");
+
+    if (stepsIndex >= 0) {
+      negativePrompt = afterNeg
+        .slice("Negative prompt:".length, stepsIndex)
+        .trim();
+
+      settingsText = afterNeg
+        .slice(stepsIndex + 1)
+        .trim();
+    } else {
+      negativePrompt = afterNeg
+        .slice("Negative prompt:".length)
+        .trim();
+    }
+  } else {
+    const stepsLineIndex = lines.findIndex(line => line.startsWith("Steps:"));
+
+    if (stepsLineIndex >= 0) {
+      prompt = lines.slice(0, stepsLineIndex).join("\n").trim();
+      settingsText = lines.slice(stepsLineIndex).join("\n").trim();
+    } else {
+      prompt = text.trim();
+    }
+  }
+
+  const items = [];
+
+  items.push({ key: "prompt", value: prompt });
+
+  if (negativePrompt) {
+    items.push({ key: "Negative prompt", value: negativePrompt });
+  }
+
+  const settings = parseSettings(settingsText);
+  for (const [key, value] of Object.entries(settings)) {
+    items.push({ key, value });
+  }
+
+  return items;
+}
+
+function parseSettings(text) {
+  const result = {};
+  const pairs = splitByCommaOutsideQuotes(text);
+
+  for (const part of pairs) {
+    const index = part.indexOf(":");
+    if (index <= 0) continue;
+
+    const key = part.slice(0, index).trim();
+    const value = part.slice(index + 1).trim();
+
+    if (key && value) {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
+function splitByCommaOutsideQuotes(text) {
+  const arr = [];
+  let current = "";
+  let inQuote = false;
+  let quoteChar = "";
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+
+    if ((ch === '"' || ch === "'") && text[i - 1] !== "\\") {
+      if (!inQuote) {
+        inQuote = true;
+        quoteChar = ch;
+      } else if (quoteChar === ch) {
+        inQuote = false;
+      }
+      current += ch;
+      continue;
+    }
+
+    if (ch === "," && !inQuote) {
+      arr.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += ch;
+  }
+
+  if (current.trim()) arr.push(current.trim());
+
+  return arr;
+}
+
+function renderItems(items) {
+  result.innerHTML = "";
+
+  for (const item of items) {
+    const div = document.createElement("div");
+    div.className = "item";
+
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = item.key;
+
+    const value = document.createElement("div");
+    value.className = "value";
+    value.textContent = item.value;
+
+    const button = document.createElement("button");
+    button.textContent = "この値をコピー";
+    button.addEventListener("click", () => copyText(item.value));
+
+    div.appendChild(label);
+    div.appendChild(value);
+    div.appendChild(button);
+    result.appendChild(div);
+  }
+}
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    message.textContent = "コピーしました。";
+  } catch {
+    fallbackCopy(text);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+  message.textContent = "コピーしました。";
+}
+
+function ascii(bytes) {
+  return Array.from(bytes).map(b => String.fromCharCode(b)).join("");
+}
+
+function latin1(bytes) {
+  return Array.from(bytes).map(b => String.fromCharCode(b)).join("");
+}
+</script>
+
+</body>
+</html>
