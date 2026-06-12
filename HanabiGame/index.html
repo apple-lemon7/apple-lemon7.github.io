@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>花火師！こまちゃん！</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="stage" aria-label="花火会場">
+        <canvas id="gameCanvas" width="1280" height="720"></canvas>
+        <div class="topbar">
+          <div>
+            <h1>花火師！こまちゃん！</h1>
+            <p id="statusLine">夜空を仕込み中...</p>
+          </div>
+          <div class="topActions">
+            <button id="audioButton" class="iconButton" type="button" title="BGM">BGM</button>
+            <button id="saveButton" class="iconButton" type="button" title="保存">保存</button>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel" aria-label="操作パネル">
+        <section class="stats" aria-label="所持品">
+          <div><span>お金</span><strong id="moneyText">0円</strong></div>
+          <div><span>素材</span><strong id="materialsText">0</strong></div>
+          <div><span>花火玉</span><strong id="shellsText">0</strong></div>
+          <div><span>発射筒</span><strong id="tubesText">1</strong></div>
+          <div><span>観客</span><strong id="crowdText">0人</strong></div>
+          <div><span>色</span><strong id="colorText">白</strong></div>
+        </section>
+
+        <section class="actions" aria-label="基本操作">
+          <button id="buyMaterialButton" type="button">素材購入</button>
+          <button id="craftButton" type="button">手動で花火作成</button>
+          <button id="launchButton" type="button">花火を打ち上げ</button>
+        </section>
+
+        <section class="upgrades" aria-label="アップグレード">
+          <h2>アップグレード</h2>
+          <div id="upgradeList"></div>
+        </section>
+
+        <section class="saveTools" aria-label="セーブデータ">
+          <h2>セーブデータ</h2>
+          <div class="saveButtons">
+            <button id="exportButton" type="button">エクスポート</button>
+            <button id="importButton" type="button">インポート</button>
+            <button id="resetButton" class="dangerButton" type="button">進捗初期化</button>
+          </div>
+          <textarea id="saveDataBox" rows="4" placeholder="インポートするセーブデータ、または直近のエクスポート結果"></textarea>
+        </section>
+      </aside>
+    </main>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
