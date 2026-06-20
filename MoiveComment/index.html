@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FlowComment</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <div>
+          <p class="eyebrow">LOCAL VIDEO COMMENT TOOL</p>
+          <h1>FlowComment</h1>
+        </div>
+        <p class="privacy-note">動画もコメントも、このブラウザの中だけ。</p>
+      </header>
+
+      <section id="dropZone" class="drop-zone" tabindex="0" role="button" aria-label="動画を選択">
+        <input id="videoInput" type="file" accept="video/*" hidden />
+        <div class="drop-copy">
+          <span class="drop-icon">＋</span>
+          <strong>動画をドロップ</strong>
+          <span>またはクリックしてファイルを選択</span>
+        </div>
+      </section>
+
+      <section id="workspace" class="workspace is-hidden" aria-label="動画コメント編集">
+        <div class="player-card">
+          <div id="stage" class="stage">
+            <video id="video" controls playsinline></video>
+            <canvas id="overlay" aria-hidden="true"></canvas>
+          </div>
+
+          <div class="composer">
+            <label class="comment-field">
+              <span class="sr-only">コメント</span>
+              <input id="commentInput" type="text" maxlength="120" placeholder="コメントを入力して Enter" autocomplete="off" />
+            </label>
+            <label class="color-picker" title="文字色">
+              <span>文字色</span>
+              <input id="colorInput" type="color" value="#ffffff" />
+            </label>
+            <button id="addButton" class="primary-button" type="button">追加</button>
+          </div>
+        </div>
+
+        <aside class="side-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">COMMENTS</p>
+              <h2>コメント一覧</h2>
+            </div>
+            <span id="commentCount" class="count-badge">0</span>
+          </div>
+
+          <div id="commentList" class="comment-list"></div>
+
+          <div class="actions">
+            <button id="saveButton" type="button">ブラウザに保存</button>
+            <button id="clearButton" class="danger-button" type="button">すべて削除</button>
+            <button id="exportButton" type="button">JSONをエクスポート</button>
+            <button id="importButton" type="button">JSONをインポート</button>
+            <input id="importInput" type="file" accept="application/json,.json" hidden />
+            <button id="downloadVideoButton" class="download-button" type="button" disabled>コメント付き動画をダウンロード</button>
+          </div>
+          <p id="status" class="status" aria-live="polite"></p>
+        </aside>
+      </section>
+    </main>
+    <script src="app.js"></script>
+  </body>
+</html>
