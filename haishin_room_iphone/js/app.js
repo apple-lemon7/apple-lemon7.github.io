@@ -315,7 +315,7 @@
       applySettings();
     });
     $("#quickSnow").addEventListener("click", () => setSetting("outsideSnowOn", !settings.outsideSnowOn));
-    $("#quickFighter").addEventListener("click", () => setSetting("fighterMode", !settings.fighterMode));
+    
 
     $("#bgmTrack").addEventListener("change", () => {
       const wasPlaying = !bgmAudio.paused;
