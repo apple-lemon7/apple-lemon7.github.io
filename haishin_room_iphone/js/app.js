@@ -211,8 +211,7 @@
     $("#quickRain").setAttribute("aria-pressed", String(settings.outsideRainOn || settings.glassDropsOn));
     $("#quickSnow").classList.toggle("active", settings.outsideSnowOn);
     $("#quickSnow").setAttribute("aria-pressed", String(settings.outsideSnowOn));
-    $("#quickFighter").classList.toggle("active", settings.fighterMode);
-    $("#quickFighter").setAttribute("aria-pressed", String(settings.fighterMode));
+
 
     if (previousFighterMode !== settings.fighterMode) {
       syncFighterMode(settings.fighterMode);
