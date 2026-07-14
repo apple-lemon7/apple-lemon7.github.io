@@ -212,15 +212,6 @@
     $("#quickSnow").classList.toggle("active", settings.outsideSnowOn);
     $("#quickSnow").setAttribute("aria-pressed", String(settings.outsideSnowOn));
 
-
-    if (previousFighterMode !== settings.fighterMode) {
-      syncFighterMode(settings.fighterMode);
-      previousFighterMode = settings.fighterMode;
-    }
-
-    const fighterSoundButton = $("#fighterSound");
-    fighterSoundButton.disabled = !settings.fighterMode;
-    fighterSoundButton.querySelector("small").textContent = settings.fighterMode ? (fighterAudio.paused ? "LOOP" : "STOP") : "MODE OFF";
     $("#bgmTrack").value = String(clamp(settings.bgmTrack, 0, BGM_TRACKS.length - 1));
     $("#bgmPlaylist").classList.toggle("active", settings.bgmMode === "playlist");
     $("#bgmLoop").classList.toggle("active", settings.bgmMode === "loop");
@@ -350,25 +341,6 @@
     });
   }
 
-  function syncFighterMode(enabled) {
-    clearTimeout(fighterTakeoffTimer);
-    scene.classList.toggle("fighter-mode", enabled);
-    scene.classList.remove("runway", "airborne");
-    if (enabled) {
-      scene.classList.add("runway");
-      $("#quickFighter").textContent = "戦闘機・滑走";
-      fighterTakeoffTimer = window.setTimeout(() => {
-        scene.classList.remove("runway");
-        scene.classList.add("airborne");
-        $("#quickFighter").textContent = "戦闘機・飛行";
-      }, TAKEOFF_DELAY);
-    } else {
-      $("#quickFighter").textContent = "戦闘機";
-      fighterAudio.pause();
-      fighterAudio.currentTime = 0;
-      updateSoundButton("fighter", false);
-    }
-  }
 
   function bindLightDragging() {
     let drag = null;
