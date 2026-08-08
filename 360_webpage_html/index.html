@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="3つの動画をスクロール操作で前後に再生するインタラクティブなWebページサンプル。">
     <title>Scroll / Motion — スクロール連動アニメーション</title>
-    <link rel="stylesheet" href="./styles.css">
-    <script src="./script.js" defer></script>
+    <link rel="stylesheet" href="./styles.css?v=20260808-2">
+    <script src="./script.js?v=20260808-2" defer></script>
   </head>
   <body>
     <noscript>このスクロール連動アニメーションにはJavaScriptが必要です。ブラウザのJavaScriptを有効にしてください。</noscript>
+    <div class="ios-video-hint" role="status">画面をタップして動画を準備</div>
 
     <header class="site-header">
       <a class="brand" href="#top" aria-label="トップへ">
@@ -55,7 +56,8 @@
             <div class="video-stage">
               <div class="video-halo" aria-hidden="true"></div>
               <div class="video-shell">
-                <video src="./assets/media/scene-01.mp4" poster="./assets/media/scene-01.jpg" preload="auto" muted playsinline disablepictureinpicture aria-label="駆け出す、その一瞬。のスクロール連動動画"></video>
+                <img class="video-poster-fallback" src="./assets/media/scene-01.jpg" alt="" aria-hidden="true">
+                <video src="./assets/media/scene-01.mp4" poster="./assets/media/scene-01.jpg" preload="metadata" muted playsinline webkit-playsinline disablepictureinpicture aria-label="駆け出す、その一瞬。のスクロール連動動画"></video>
                 <div class="video-glass" aria-hidden="true"></div>
               </div>
               <div class="stage-caption"><span>SCROLL TO SCRUB</span><span class="stage-percent">0%</span></div>
@@ -82,7 +84,8 @@
             <div class="video-stage">
               <div class="video-halo" aria-hidden="true"></div>
               <div class="video-shell">
-                <video src="./assets/media/scene-02.mp4" poster="./assets/media/scene-02.jpg" preload="auto" muted playsinline disablepictureinpicture aria-label="混ぜる、切る、笑う。のスクロール連動動画"></video>
+                <img class="video-poster-fallback" src="./assets/media/scene-02.jpg" alt="" aria-hidden="true">
+                <video src="./assets/media/scene-02.mp4" poster="./assets/media/scene-02.jpg" preload="metadata" muted playsinline webkit-playsinline disablepictureinpicture aria-label="混ぜる、切る、笑う。のスクロール連動動画"></video>
                 <div class="video-glass" aria-hidden="true"></div>
               </div>
               <div class="stage-caption"><span>SCROLL TO SCRUB</span><span class="stage-percent">0%</span></div>
@@ -109,7 +112,8 @@
             <div class="video-stage">
               <div class="video-halo" aria-hidden="true"></div>
               <div class="video-shell">
-                <video src="./assets/media/scene-03.mp4" poster="./assets/media/scene-03.jpg" preload="auto" muted playsinline disablepictureinpicture aria-label="近づく表情まで。のスクロール連動動画"></video>
+                <img class="video-poster-fallback" src="./assets/media/scene-03.jpg" alt="" aria-hidden="true">
+                <video src="./assets/media/scene-03.mp4" poster="./assets/media/scene-03.jpg" preload="metadata" muted playsinline webkit-playsinline disablepictureinpicture aria-label="近づく表情まで。のスクロール連動動画"></video>
                 <div class="video-glass" aria-hidden="true"></div>
               </div>
               <div class="stage-caption"><span>SCROLL TO SCRUB</span><span class="stage-percent">0%</span></div>
