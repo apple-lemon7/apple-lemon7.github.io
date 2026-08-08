@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="3つの動画をスクロール操作で前後に再生するインタラクティブなWebページサンプル。">
+    <title>Scroll / Motion — スクロール連動アニメーション</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./script.js" defer></script>
+  </head>
+  <body>
+    <noscript>このスクロール連動アニメーションにはJavaScriptが必要です。ブラウザのJavaScriptを有効にしてください。</noscript>
+
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="トップへ">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>SCROLL / MOTION</span>
+      </a>
+      <span class="header-note">THREE SCENES · ONE GESTURE</span>
+    </header>
+
+    <main>
+      <section class="hero" id="top">
+        <div class="hero-orbit orbit-one" aria-hidden="true"></div>
+        <div class="hero-orbit orbit-two" aria-hidden="true"></div>
+        <p class="hero-kicker">INTERACTIVE FILM / 001</p>
+        <h1>動画を、<br><em>スクロールする。</em></h1>
+        <p class="hero-lead">
+          ページを送る指の動きが、そのまま映像の時間になる。<br>
+          3つのシーンを、あなたのペースで進めてください。
+        </p>
+        <a class="start-link" href="#scene-start">
+          <span>体験をはじめる</span>
+          <i aria-hidden="true">↓</i>
+        </a>
+        <div class="hero-count" aria-hidden="true">03</div>
+      </section>
+
+      <div id="scene-start">
+        <section class="scroll-scene tint-lime" data-scroll-scene aria-label="01 駆け出す、その一瞬。">
+          <div class="scene-sticky">
+            <div class="ambient-glow" aria-hidden="true"></div>
+            <div class="scene-copy">
+              <div class="scene-index-row">
+                <span class="scene-number">01</span><span class="scene-rule"></span>
+                <span class="scene-eyebrow">MOVE WITH THE MOMENT</span>
+              </div>
+              <h2>駆け出す、その一瞬。</h2>
+              <p>スクロールするたび、映像の時間が指先についてくる。下へ進めば前へ、上へ戻れば巻き戻ります。</p>
+              <div class="scene-progress" role="progressbar" aria-label="再生位置" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <span style="width:0%;background:#b9ff62"></span>
+              </div>
+              <span class="progress-label">SCROLL POSITION — <b>000</b>%</span>
+            </div>
+            <div class="video-stage">
+              <div class="video-halo" aria-hidden="true"></div>
+              <div class="video-shell">
+                <video src="./assets/media/scene-01.mp4" poster="./assets/media/scene-01.jpg" preload="auto" muted playsinline disablepictureinpicture aria-label="駆け出す、その一瞬。のスクロール連動動画"></video>
+                <div class="video-glass" aria-hidden="true"></div>
+              </div>
+              <div class="stage-caption"><span>SCROLL TO SCRUB</span><span class="stage-percent">0%</span></div>
+            </div>
+            <div class="side-marker" aria-hidden="true"><span>01</span><i style="height:4%;background:#b9ff62"></i></div>
+          </div>
+        </section>
+
+        <section class="scroll-scene tint-amber" data-scroll-scene aria-label="02 混ぜる、切る、笑う。">
+          <div class="scene-sticky">
+            <div class="ambient-glow" aria-hidden="true"></div>
+            <div class="scene-copy">
+              <div class="scene-index-row">
+                <span class="scene-number">02</span><span class="scene-rule"></span>
+                <span class="scene-eyebrow">MAKE IT TOGETHER</span>
+              </div>
+              <h2>混ぜる、切る、笑う。</h2>
+              <p>再生ボタンは必要ありません。ページのストーリーと映像を、ひとつのスクロール体験にまとめます。</p>
+              <div class="scene-progress" role="progressbar" aria-label="再生位置" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <span style="width:0%;background:#ffb464"></span>
+              </div>
+              <span class="progress-label">SCROLL POSITION — <b>000</b>%</span>
+            </div>
+            <div class="video-stage">
+              <div class="video-halo" aria-hidden="true"></div>
+              <div class="video-shell">
+                <video src="./assets/media/scene-02.mp4" poster="./assets/media/scene-02.jpg" preload="auto" muted playsinline disablepictureinpicture aria-label="混ぜる、切る、笑う。のスクロール連動動画"></video>
+                <div class="video-glass" aria-hidden="true"></div>
+              </div>
+              <div class="stage-caption"><span>SCROLL TO SCRUB</span><span class="stage-percent">0%</span></div>
+            </div>
+            <div class="side-marker" aria-hidden="true"><span>02</span><i style="height:4%;background:#ffb464"></i></div>
+          </div>
+        </section>
+
+        <section class="scroll-scene tint-cyan" data-scroll-scene aria-label="03 近づく表情まで。">
+          <div class="scene-sticky">
+            <div class="ambient-glow" aria-hidden="true"></div>
+            <div class="scene-copy">
+              <div class="scene-index-row">
+                <span class="scene-number">03</span><span class="scene-rule"></span>
+                <span class="scene-eyebrow">PAUSE &amp; BREATHE</span>
+              </div>
+              <h2>近づく表情まで。</h2>
+              <p>最後のフレームまで細かくコントロール。製品回転、工程紹介、短い物語にも応用できます。</p>
+              <div class="scene-progress" role="progressbar" aria-label="再生位置" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <span style="width:0%;background:#79d9ff"></span>
+              </div>
+              <span class="progress-label">SCROLL POSITION — <b>000</b>%</span>
+            </div>
+            <div class="video-stage">
+              <div class="video-halo" aria-hidden="true"></div>
+              <div class="video-shell">
+                <video src="./assets/media/scene-03.mp4" poster="./assets/media/scene-03.jpg" preload="auto" muted playsinline disablepictureinpicture aria-label="近づく表情まで。のスクロール連動動画"></video>
+                <div class="video-glass" aria-hidden="true"></div>
+              </div>
+              <div class="stage-caption"><span>SCROLL TO SCRUB</span><span class="stage-percent">0%</span></div>
+            </div>
+            <div class="side-marker" aria-hidden="true"><span>03</span><i style="height:4%;background:#79d9ff"></i></div>
+          </div>
+        </section>
+      </div>
+
+      <footer class="ending">
+        <p>END OF SEQUENCE</p>
+        <h2>スクロールが、<br>再生ボタンになる。</h2>
+        <a href="#top">もう一度見る <span>↑</span></a>
+      </footer>
+    </main>
+  </body>
+</html>
